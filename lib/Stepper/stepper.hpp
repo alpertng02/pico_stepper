@@ -16,6 +16,7 @@ public:
 
     void setSpeed(const int32_t step);
     void setSpeed(const float rad);
+    void setSpeedFp(const int64_t stepFp);
 
     void changeSpeed(const int32_t changeSteps);
     void changeSpeed(const float changeRads);
@@ -24,25 +25,28 @@ public:
 
     void enable(const bool en);
 
-    static constexpr int32_t radsToSteps(const float rads, const uint32_t stepsPerRev) {
-        return static_cast<int32_t>((rads / mPi) * (stepsPerRev / 2));
+    static constexpr float radsPerSteps(const uint32_t stepsPerRev) {
+        return (mPi * 2.0f / stepsPerRev);
     }
 
-    static constexpr float stepsToRads(const int32_t steps, const uint32_t stepsPerRev) {
-        return static_cast<float>((steps * 2.0f * mPi) / stepsPerRev);
+    static constexpr float stepsPerRads(const uint32_t stepsPerRev) {
+        return stepsPerRev / (2.0f * mPi);
     }
+    template <typename T>
+    static bool IsInBounds(const T& value, const T& low, const T& high) {
+        return !(value < low) && !(high < value);
+    }
+
     ~Stepper();
-
-protected:
-    int32_t radsToSteps(const float rads);
-    float stepsToRads(const int32_t steps);
-    int32_t mSpeed = 0;
 
 private:
     const uint mPul;
     const uint mDir;
     const uint mSlice;
 
+    int32_t radsToSteps(const float rads);
+    float stepsToRads(const int32_t steps);
+    int32_t mSpeed = 0;
 
     const uint mStepsPerRev = 400;
 

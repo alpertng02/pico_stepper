@@ -3,6 +3,8 @@
 #include "hardware/pwm.h"
 #include "hardware/gpio.h"
 #include "hardware/clocks.h"
+#include "pico/time.h"
+#include "pico/platform.h"
 
 static volatile int stpCount = 0;
 
@@ -12,6 +14,33 @@ static volatile int32_t stpDir[8] {};
 static volatile int32_t stpPos[8] {};
 static volatile int32_t stpTargetPos[8] {};
 static volatile bool stpPosSet[8] {};
+
+static repeating_timer stpTimer[8] {};
+static volatile int64_t stpSpeedFp[8] {};
+static volatile int64_t stpTargetSpeedFp[8] {};
+static volatile int64_t stpAccelFp[8] {};
+
+
+
+template <uint pul>
+static bool stepper_timer_callback(repeating_timer* rt) {
+    Stepper* stepper = static_cast<Stepper*>(rt->user_data);
+    const uint slice = pwm_gpio_to_slice_num(pul);
+
+    int64_t accelFp = stpAccelFp[slice];
+    if (stpTargetSpeedFp[slice] < stpSpeedFp[slice]) {
+        accelFp *= -1;
+    }
+    const int64_t accelAmountFp = (accelFp * rt->delay_us / 1000000);
+    int64_t changedSpeedFp = stpSpeedFp[slice] + accelAmountFp;
+    
+    if (Stepper::IsInBounds(changedSpeedFp, stpTargetSpeedFp[slice] + accelFp, stpTargetSpeedFp[slice] - accelFp)) {
+        changedSpeedFp = stpTargetSpeedFp[slice];
+    }
+
+    stepper->setSpeedFp(changedSpeedFp);
+    return true;
+}
 
 static void stepper_pwm_callback() {
     uint32_t irq { pwm_get_irq_status_mask() };
@@ -87,6 +116,7 @@ void Stepper::setSpeed(const int32_t step) {
     }
     mWrap = wrap;
     mSpeed = mClockHz / mWrap;
+    stpSpeedFp[mSlice] = mSpeed * 1000;
 
     pwm_set_wrap(mSlice, mWrap);
     pwm_set_gpio_level(mPul, mWrap / 2);
@@ -97,6 +127,31 @@ void Stepper::setSpeed(const float rad) {
     setSpeed(radsToSteps(rad));
 }
 
+void Stepper::setSpeedFp(const int64_t stepFp) {
+    uint32_t wrap = static_cast<uint32_t>(mClockHz / (stepFp / 1000));
+    if (wrap < (0x0001 << 10)) {
+        mClockDiv /= 2.0f;
+        mClockHz = static_cast<uint32_t>(mSysClockHz / mClockDiv);
+        pwm_set_clkdiv(mSlice, mClockDiv);
+        setSpeedFp(stepFp);
+    } else if (wrap > UINT16_MAX) {
+        if (mClockDiv >= 255.9f) {
+            wrap = UINT16_MAX;
+        } else {
+            mClockDiv *= 1.5f;
+            mClockDiv = mClockDiv >= 255.9f ? 255.9f : mClockDiv;
+            mClockHz = static_cast<uint32_t>(mSysClockHz / mClockDiv);
+            pwm_set_clkdiv(mSlice, mClockDiv);
+            setSpeedFp(stepFp);
+        }
+    }
+    mWrap = wrap;
+    mSpeed = mClockHz / mWrap;
+    stpSpeedFp[mSlice] = stepFp;
+
+    pwm_set_wrap(mSlice, mWrap);
+    pwm_set_gpio_level(mPul, mWrap / 2);
+}
 
 void Stepper::changeSpeed(const int32_t changeSteps) {
     setSpeed(mSpeed + changeSteps);

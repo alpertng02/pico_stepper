@@ -10,8 +10,8 @@ target_link_libraries(pico-stepper
         hardware_gpio
         hardware_pwm
         hardware_clocks
-        # pico_time
-        # pico_platform
+        pico_time
+        pico_platform
 )
 
 target_include_directories(pico-stepper
