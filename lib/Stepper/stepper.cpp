@@ -31,24 +31,19 @@ static bool stepper_timer_callback(repeating_timer* rt) {
     const int32_t remainingSteps = stpTargetPos[slice] - stpPos[slice];
     int64_t targetSpeedFp = stpTargetSpeedFp[slice];
     int64_t accelAmountFp = (stpAccelFp[slice] * rt->delay_us / 1000000);
-    
+
     if (remainingSteps * stpDir[slice] < 0) {
-        if(Stepper::IsInBounds(stpSpeedFp[slice], accelAmountFp, -accelAmountFp)) {
-            stepper->setDir(stpDir[slice] > 0 ? false : true); 
+        if (Stepper::IsInBounds(stpSpeedFp[slice], accelAmountFp, -accelAmountFp)) {
+            stepper->setDir(stpDir[slice] > 0 ? false : true);
             return true;
         } else {
             targetSpeedFp = 0;
         }
     }
 
-    if (targetSpeedFp < stpSpeedFp[slice]) {
-        accelAmountFp *= -1;
-    }
+    accelAmountFp *= targetSpeedFp < stpSpeedFp[slice] ? -1 : 1;
     int64_t changedSpeedFp = stpSpeedFp[slice] + accelAmountFp;
-
-    if (Stepper::IsInBounds(changedSpeedFp, targetSpeedFp + accelFp, targetSpeedFp - accelFp)) {
-        changedSpeedFp = targetSpeedFp;
-    }
+    changedSpeedFp = Stepper::IsInBounds(changedSpeedFp, targetSpeedFp + accelFp, targetSpeedFp - accelFp) ? targetSpeedFp : changedSpeedFp;
 
     stepper->setSpeedFp(changedSpeedFp);
     return true;
@@ -65,13 +60,11 @@ static void stepper_pwm_callback() {
 
             stpPos[slice] += stpDir[slice];
 
-            if (stpPosSet[slice]) {
-                if (stpPos[slice] == stpTargetPos[slice]) {
-                    stpPosSet[slice] = false;
-                    pwm_set_enabled(slice, false);
-                    cancel_repeating_timer(&stpTimer[slice]);
-                    continue;;
-                }
+            if (stpPos[slice] == stpTargetPos[slice] && stpPosSet[slice]) {
+                stpPosSet[slice] = false;
+                pwm_set_enabled(slice, false);
+                cancel_repeating_timer(&stpTimer[slice]);
+                continue;;
             }
         }
     }
@@ -157,7 +150,6 @@ void Stepper::setSpeed(const int32_t step) {
     pwm_set_wrap(mSlice, mWrap);
     pwm_set_gpio_level(mPul, mWrap / 2);
 }
-
 
 void Stepper::setSpeed(const float rad) {
     setSpeed(radsToSteps(rad));
