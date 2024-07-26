@@ -6,7 +6,7 @@
 class Stepper {
 public:
 
-    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev);
+    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
 
     void setPos(const int32_t currentStep);
     void setPos(const float currentRads);
@@ -22,8 +22,11 @@ public:
     void changeSpeed(const float changeRads);
 
     void setDir(const bool dir);
+    int getDir();
 
     void enable(const bool en);
+
+    void startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs);
 
     static constexpr float radsPerSteps(const uint32_t stepsPerRev) {
         return (mPi * 2.0f / stepsPerRev);
@@ -49,6 +52,7 @@ private:
     int32_t mSpeed = 0;
 
     const uint mStepsPerRev = 400;
+    const uint32_t mPeriodMs = 1;
 
     uint32_t mClockHz = 125 * 1000 * 1000;
     uint32_t mSysClockHz;

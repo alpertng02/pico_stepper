@@ -6,6 +6,8 @@
 #include "pico/time.h"
 #include "pico/platform.h"
 
+static alarm_pool* alarmPoolForCore1 { nullptr };
+
 static volatile int stpCount = 0;
 
 static volatile uint stpSlice[8] {};
@@ -15,27 +17,37 @@ static volatile int32_t stpPos[8] {};
 static volatile int32_t stpTargetPos[8] {};
 static volatile bool stpPosSet[8] {};
 
-static repeating_timer stpTimer[8] {};
 static volatile int64_t stpSpeedFp[8] {};
 static volatile int64_t stpTargetSpeedFp[8] {};
 static volatile int64_t stpAccelFp[8] {};
 
-
+static repeating_timer stpTimer[8] {};
 
 template <uint pul>
 static bool stepper_timer_callback(repeating_timer* rt) {
-    Stepper* stepper = static_cast<Stepper*>(rt->user_data);
     const uint slice = pwm_gpio_to_slice_num(pul);
+    Stepper* stepper = static_cast<Stepper*>(rt->user_data);
 
-    int64_t accelFp = stpAccelFp[slice];
-    if (stpTargetSpeedFp[slice] < stpSpeedFp[slice]) {
-        accelFp *= -1;
-    }
-    const int64_t accelAmountFp = (accelFp * rt->delay_us / 1000000);
-    int64_t changedSpeedFp = stpSpeedFp[slice] + accelAmountFp;
+    const int32_t remainingSteps = stpTargetPos[slice] - stpPos[slice];
+    int64_t targetSpeedFp = stpTargetSpeedFp[slice];
+    int64_t accelAmountFp = (stpAccelFp[slice] * rt->delay_us / 1000000);
     
-    if (Stepper::IsInBounds(changedSpeedFp, stpTargetSpeedFp[slice] + accelFp, stpTargetSpeedFp[slice] - accelFp)) {
-        changedSpeedFp = stpTargetSpeedFp[slice];
+    if (remainingSteps * stpDir[slice] < 0) {
+        if(Stepper::IsInBounds(stpSpeedFp[slice], accelAmountFp, -accelAmountFp)) {
+            stepper->setDir(stpDir[slice] > 0 ? false : true); 
+            return true;
+        } else {
+            targetSpeedFp = 0;
+        }
+    }
+
+    if (targetSpeedFp < stpSpeedFp[slice]) {
+        accelAmountFp *= -1;
+    }
+    int64_t changedSpeedFp = stpSpeedFp[slice] + accelAmountFp;
+
+    if (Stepper::IsInBounds(changedSpeedFp, targetSpeedFp + accelFp, targetSpeedFp - accelFp)) {
+        changedSpeedFp = targetSpeedFp;
     }
 
     stepper->setSpeedFp(changedSpeedFp);
@@ -44,7 +56,6 @@ static bool stepper_timer_callback(repeating_timer* rt) {
 
 static void stepper_pwm_callback() {
     uint32_t irq { pwm_get_irq_status_mask() };
-
     for (int i = 0; i < stpCount; i++) {
         const uint slice = stpSlice[i];
 
@@ -58,6 +69,7 @@ static void stepper_pwm_callback() {
                 if (stpPos[slice] == stpTargetPos[slice]) {
                     stpPosSet[slice] = false;
                     pwm_set_enabled(slice, false);
+                    cancel_repeating_timer(&stpTimer[slice]);
                     continue;;
                 }
             }
@@ -65,11 +77,11 @@ static void stepper_pwm_callback() {
     }
 };
 
-Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400) :
-    mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev) {
+Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev, const uint32_t periodMs) :
+    mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev), mPeriodMs(periodMs) {
     stpSlice[stpCount] = mSlice;
-    stpPos[stpCount] = 0;
-    stpDir[stpCount] = true;
+    stpPos[mSlice] = 0;
+    stpDir[mSlice] = true;
     stpCount++;
 
     gpio_init(dirPin);
@@ -77,6 +89,30 @@ Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRe
     gpio_put(dirPin, true);
 
     initPwm();
+
+    if (get_core_num() == 1) {
+        if (alarmPoolForCore1 == nullptr) {
+            alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
+        }
+        alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -periodMs, stepper_timer_callback<0>, this, &stpTimer[mSlice]);
+    } else {
+        add_repeating_timer_ms(-periodMs, stepper_timer_callback<0>, this, &stpTimer[mSlice]);
+    }
+}
+
+void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs) {
+    setTargetPos(targetPosSteps);
+
+    stpAccelFp[mSlice] = static_cast<int64_t>(accelSteps) * 1000;
+
+    if (stpTimer[mSlice].alarm_id == 0) {
+        if (get_core_num() == 1) {
+            alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, stepper_timer_callback<0>, this, &stpTimer[mSlice]);
+        } else {
+            add_repeating_timer_ms(-mPeriodMs, stepper_timer_callback<0>, this, &stpTimer[mSlice]);
+        }
+    }
+
 }
 
 void Stepper::setPos(const int32_t currentStep) {
@@ -164,6 +200,10 @@ void Stepper::changeSpeed(const float changeRads) {
 void Stepper::setDir(const bool dir) {
     stpDir[mSlice] = dir ? 1 : -1;
     gpio_put(mDir, dir);
+}
+
+int Stepper::getDir() {
+    return stpDir[mSlice];
 }
 
 void Stepper::enable(const bool en) {
