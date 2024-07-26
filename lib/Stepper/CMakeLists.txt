@@ -12,6 +12,7 @@ target_link_libraries(pico-stepper
         hardware_clocks
         pico_time
         pico_platform
+        pico_stdlib
 )
 
 target_include_directories(pico-stepper
