@@ -76,17 +76,6 @@ static void stepper_pwm_callback() {
     }
 };
 
-
-/**
- * @brief Constructor for the Stepper class.
- * 
- * This constructor initializes a Stepper object with the specified parameters.
- * 
- * @param pulPin The GPIO pin number for the PUL pin.
- * @param dirPin The GPIO pin number for the DIR pin.
- * @param stepsPerRev The number of steps per revolution for the stepper motor.
- * @param periodMs The period in milliseconds for the stepper motor movement.
- */
 Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev, const uint32_t periodMs) :
     mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev), mPeriodMs(periodMs) {
     stpSlice[stpCount] = mSlice;
@@ -110,13 +99,6 @@ Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRe
     }
 }
 
-/**
- * Starts the motion of the stepper motor.
- *
- * @param targetPosSteps The target position in steps.
- * @param accelSteps The acceleration in steps per second squared.
- * @param timeMs The time in milliseconds.
- */
 void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs) {
     setTargetPos(targetPosSteps);
 
@@ -129,61 +111,33 @@ void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps
             add_repeating_timer_ms(-mPeriodMs, stepper_timer_callback<0>, this, &stpTimer[mSlice]);
         }
     }
-
 }
 
-/**
- * @brief Sets the current position of the stepper motor.
- *
- * This function sets the current position of the stepper motor to the specified number of steps.
- *
- * @param currentSteps The number of steps to set as the current position.
- */
 void Stepper::setPos(const int32_t currentSteps) {
     stpPos[mSlice] = currentSteps;
 }
 
-/**
- * @brief Sets the position of the stepper motor in radians.
- * 
- * This function sets the position of the stepper motor using the specified angle in radians.
- * It internally converts the angle to steps and then calls the `setPos` function with the step value.
- * 
- * @param currentRads The desired position of the stepper motor in radians.
- */
 void Stepper::setPos(const float currentRads) {
     setPos(radsToSteps(currentRads));
 }
 
-/**
- * Sets the target position of the stepper motor in steps.
- * 
- * @param targetSteps The target position in steps.
- */
+int32_t Stepper::getPos() {
+    return stpPos[mSlice];
+}
+
+float Stepper::getPosRads() {
+    return static_cast<float>(getPos()) * 2.0f * mPi / mStepsPerRev;
+}
+
 void Stepper::setTargetPos(const int32_t targetSteps) {
     stpTargetPos[mSlice] = targetSteps;
     stpPosSet[mSlice] = true;
 }
 
-
-/**
- * Sets the target position of the stepper motor in radians.
- * 
- * @param targetRads The target position in radians.
- */
 void Stepper::setTargetPos(const float targetRads) {
     setTargetPos(radsToSteps(targetRads));
 }
 
-/**
- * @brief Sets the speed of the stepper motor.
- *
- * This function sets the speed of the stepper motor by calculating the appropriate clock division
- * and wrap values based on the desired step value. It adjusts the clock division and wrap values
- * recursively until the desired speed is achieved.
- *
- * @param step The desired step value.
- */
 void Stepper::setSpeed(const int32_t step) {
     uint32_t wrap = mClockHz / step;
     if (wrap < (0x0001 << 10)) {
@@ -210,25 +164,10 @@ void Stepper::setSpeed(const int32_t step) {
     pwm_set_gpio_level(mPul, mWrap / 2);
 }
 
-/**
- * Sets the speed of the stepper motor in radians per second.
- * 
- * @param rad The desired speed of the stepper motor in radians per second.
- */
 void Stepper::setSpeed(const float rad) {
     setSpeed(radsToSteps(rad));
 }
 
-/**
- * Sets the speed of the stepper motor in fixed-point format.
- *
- * This function calculates the appropriate clock frequency and clock divider
- * based on the desired step frequency in fixed-point format. It adjusts the
- * clock divider and clock frequency to ensure that the step frequency falls
- * within the acceptable range.
- *
- * @param stepFp The desired step frequency in fixed-point format.
- */
 void Stepper::setSpeedFp(const int64_t stepFp) {
     uint32_t wrap = static_cast<uint32_t>(mClockHz / (stepFp / 1000));
     if (wrap < (0x0001 << 10)) {
@@ -255,54 +194,15 @@ void Stepper::setSpeedFp(const int64_t stepFp) {
     pwm_set_gpio_level(mPul, mWrap / 2);
 }
 
-/**
- * Changes the speed of the stepper motor by the specified number of steps.
- *
- * @param changeSteps The number of steps to change the speed by.
- */
-void Stepper::changeSpeed(const int32_t changeSteps) {
-    setSpeed(mSpeed + changeSteps);
-}
-
-/**
- * Changes the speed of the stepper motor.
- *
- * This function takes a change in radians per second and converts it to the corresponding change in steps per second.
- * It then calls the `changeSpeed` function with the calculated change in steps per second.
- *
- * @param changeRads The change in radians per second.
- */
-void Stepper::changeSpeed(const float changeRads) {
-    changeSpeed(radsToSteps(changeRads));
-}
-
-/**
- * @brief Sets the direction of the stepper motor.
- *
- * This function sets the direction of the stepper motor by updating the `stpDir` array and
- * setting the corresponding GPIO pin.
- *
- * @param dir The direction of the stepper motor. `true` for forward, `false` for backward.
- */
 void Stepper::setDir(const bool dir) {
     stpDir[mSlice] = dir ? 1 : -1;
     gpio_put(mDir, dir);
 }
 
-/**
- * @brief Get the direction of the stepper motor.
- * 
- * @return int The direction of the stepper motor.
- */
 int Stepper::getDir() {
     return stpDir[mSlice];
 }
 
-/**
- * Enables or disables the stepper motor.
- *
- * @param en A boolean value indicating whether to enable or disable the stepper motor.
- */
 void Stepper::enable(const bool en) {
     if (stpPosSet[mSlice]) {
         if (stpTargetPos[mSlice] == stpPos[mSlice]) {
@@ -319,32 +219,12 @@ void Stepper::enable(const bool en) {
     pwm_set_enabled(mSlice, en);
 }
 
-/**
- * Destructor for the Stepper class.
- * Disables the PWM interrupt and deinitializes the pulse (PUL) and direction (DIR) GPIO pins.
- */
 Stepper::~Stepper() {
     pwm_set_irq_enabled(mSlice, false);
     gpio_deinit(mPul);
     gpio_deinit(mDir);
 }
 
-/**
- * @brief Initializes the PWM configuration for the stepper motor.
- * 
- * This function sets up the PWM functionality for the stepper motor by configuring the GPIO pin,
- * setting the clock division and wrap values, and enabling the PWM interrupt. It also initializes
- * the PWM slice with the provided configuration.
- * 
- * @note This function assumes that the `mPul` member variable has been properly set to the GPIO pin
- *       used for the PWM functionality.
- * 
- * @note This function assumes that the `mSysClockHz` and `mClockDiv` member variables have been properly
- *       set to the system clock frequency and the desired clock division value, respectively.
- * 
- * @param None
- * @return None
- */
 void Stepper::initPwm() {
     gpio_set_function(mPul, GPIO_FUNC_PWM);
 
@@ -372,25 +252,10 @@ void Stepper::initPwm() {
 #endif
 }
 
-/**
- * Converts radians to steps.
- *
- * This function takes a value in radians and converts it to the corresponding number of steps
- * based on the stepper motor's configuration.
- *
- * @param rads The value in radians to be converted.
- * @return The number of steps corresponding to the given value in radians.
- */
 int32_t Stepper::radsToSteps(const float rads) {
     return static_cast<int32_t>((rads / mPi) * (mStepsPerRev / 2));
 }
 
-/**
- * Converts the given number of steps to radians.
- *
- * @param steps The number of steps to convert.
- * @return The equivalent value in radians.
- */
 float Stepper::stepsToRads(const int32_t steps) {
     return static_cast<float>((steps * 2.0f * mPi) / mStepsPerRev);
 }

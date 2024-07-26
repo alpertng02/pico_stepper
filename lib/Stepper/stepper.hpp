@@ -3,62 +3,184 @@
 
 #include "hardware/gpio.h"
 
-// Stepper motor control class
+/**
+ * @brief Stepper class for controlling a stepper motor.
+ *
+ * This class provides functions to control a stepper motor using the Raspberry Pi Pico.
+ * It uses the PUL and DIR pins to control the stepper motor.
+ *
+ * The class provides functions to change the speed of the stepper motor, set the target position,
+ * set the direction, enable or disable the stepper motor, and start the motion of the stepper motor.
+ *
+ * The class also provides functions to set the current position of the stepper motor in steps or radians.
+ */
 class Stepper {
 public:
-    // Constructor to initialize the stepper motor with given pins and settings
+    /**
+     * @brief Constructor for the Stepper class.
+     *
+     * This constructor initializes a Stepper object with the specified parameters.
+     *
+     * @param pulPin The GPIO pin number for the PUL pin.
+     * @param dirPin The GPIO pin number for the DIR pin.
+     * @param stepsPerRev The number of steps per revolution for the stepper motor.
+     * @param periodMs The period in milliseconds for the stepper motor movement.
+     */
     Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
 
-    // Set the current position in steps
-    void setPos(const int32_t currentStep);
-    // Set the current position in radians
-    void setPos(const float currentRads);
-
-    // Set the target position in steps
-    void setTargetPos(const int32_t targetStep);
-    // Set the target position in radians
-    void setTargetPos(const float targetRads);
-
-    // Set the speed in steps per second
+    /**
+      * @brief Sets the speed of the stepper motor.
+      *
+      * This function sets the speed of the stepper motor by calculating the appropriate clock division
+      * and wrap values based on the desired step value. It adjusts the clock division and wrap values
+      * recursively until the desired speed is achieved.
+      *
+      * @param step The desired step value.
+    */
     void setSpeed(const int32_t step);
-    // Set the speed in radians per second
+
+    /**
+     * Sets the speed of the stepper motor in radians per second.
+     *
+     * @param rad The desired speed of the stepper motor in radians per second.
+     */
     void setSpeed(const float rad);
-    // Set the speed using fixed-point arithmetic
+
+    /**
+     * Sets the speed of the stepper motor in fixed-point format.
+     *
+     * This function calculates the appropriate clock frequency and clock divider
+     * based on the desired step frequency in fixed-point format. It adjusts the
+     * clock divider and clock frequency to ensure that the step frequency falls
+     * within the acceptable range.
+     *
+     * @param stepFp The desired step frequency in fixed-point format.
+     */
     void setSpeedFp(const int64_t stepFp);
 
-    // Change the speed by a given number of steps per second
-    void changeSpeed(const int32_t changeSteps);
-    // Change the speed by a given number of radians per second
-    void changeSpeed(const float changeRads);
+    /**
+     * Sets the target position of the stepper motor in steps.
+     *
+     * @param targetSteps The target position in steps.
+     */
+    void setTargetPos(const int32_t targetSteps);
 
-    // Set the direction of the stepper motor
+    
+    /**
+     * @brief Sets the target position for the stepper motor.
+     *
+     * This function sets the target position for the stepper motor in radians.
+     * The motor will move towards this target position when the `step` function is called.
+     *
+     * @param targetRads The target position in radians.
+     */
+    void setTargetPos(const float targetRads);
+    
+    /**
+     * @brief Sets the direction of the stepper motor.
+     *
+     * This function sets the direction of the stepper motor by updating the `stpDir` array and
+     * setting the corresponding GPIO pin.
+     *
+     * @param dir The direction of the stepper motor. `true` for forward, `false` for backward.
+     */
     void setDir(const bool dir);
-    // Get the current direction of the stepper motor
+
+    /**
+     * @brief Get the direction of the stepper motor.
+     *
+     * @return int The direction of the stepper motor.
+     */
     int getDir();
 
-    // Enable or disable the stepper motor
+    /**
+     * Enables or disables the stepper motor.
+     *
+     * @param en A boolean value indicating whether to enable or disable the stepper motor.
+     */
     void enable(const bool en);
 
-    // Start motion towards a target position with acceleration over a given time
+    /**
+     * Starts the motion of the stepper motor.
+     *
+     * @param targetPosSteps The target position in steps.
+     * @param accelSteps The acceleration in steps per second squared.
+     * @param timeMs The time in milliseconds.
+     */
     void startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs);
 
-    // Convert steps to radians based on steps per revolution
+    /**
+     * @brief Sets the current position of the stepper motor.
+     *
+     * This function sets the current position of the stepper motor to the specified number of steps.
+     *
+     * @param currentSteps The number of steps to set as the current position.
+     */
+    void setPos(const int32_t currentSteps);
+
+    /**
+     * @brief Sets the position of the stepper motor in radians.
+     *
+     * This function sets the position of the stepper motor using the specified angle in radians.
+     * It internally converts the angle to steps and then calls the `setPos` function with the step value.
+     *
+     * @param currentRads The desired position of the stepper motor in radians.
+     */
+    void setPos(const float currentRads);
+
+    
+    /**
+     * @brief Gets the current position of the stepper motor.
+     *
+     * @return The current position of the stepper motor as a 32-bit signed integer.
+     */
+    int32_t getPos();
+
+    /**
+     * @brief Get the current position of the stepper motor in radians.
+     * 
+     * @return The current position of the stepper motor in radians.
+     */
+    float getPosRads();
+    
+    /**
+     * Calculates the radians per step for a given number of steps per revolution.
+     *
+     * @param stepsPerRev The number of steps per revolution.
+     * @return The radians per step.
+     */
     static constexpr float radsPerSteps(const uint32_t stepsPerRev) {
         return (mPi * 2.0f / stepsPerRev);
     }
 
-    // Convert radians to steps based on steps per revolution
+    /**
+     * Converts the number of steps per revolution to steps per radian.
+     *
+     * @param stepsPerRev The number of steps per revolution.
+     * @return The equivalent number of steps per radian.
+     */
     static constexpr float stepsPerRads(const uint32_t stepsPerRev) {
         return stepsPerRev / (2.0f * mPi);
     }
 
-    // Check if a value is within a given range
+    /**
+     * Checks if a value is within a specified range.
+     *
+     * @tparam T The type of the value and range boundaries.
+     * @param value The value to check.
+     * @param low The lower bound of the range.
+     * @param high The upper bound of the range.
+     * @return True if the value is within the range, false otherwise.
+     */
     template <typename T>
     static bool IsInBounds(const T& value, const T& low, const T& high) {
         return !(value < low) && !(high < value);
     }
 
-    // Destructor
+    /**
+     * Destructor for the Stepper class.
+     * Disables the PWM interrupt and deinitializes the pulse (PUL) and direction (DIR) GPIO pins.
+     */
     ~Stepper();
 
 private:
