@@ -68,9 +68,8 @@ static void stepper_pwm_callback(void) {
 
             stpPos[slice] += stpDir[slice];
 
-            printf("Slice %u, Pos %ld\n", slice, stpPos[slice]);
-
-            if (stpPos[slice] == stpTargetPos[slice] && stpPosSet[slice]) {
+            // printf("Slice %u, Pos %ld\n", slice, stpPos[slice]);
+            if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice] ) {
                 stpPosSet[slice] = false;
                 stpSpeedFp[slice] = 0;
                 pwm_set_enabled(slice, false);
@@ -111,20 +110,6 @@ void Stepper::setAccel(const float accelRads) {
 void Stepper::setAccelFp(const int64_t accelFp) {
     stpAccelFp[mSlice] = accelFp;
 }
-
-// void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs) {
-//     setTargetPos(targetPosSteps);
-
-//     stpAccelFp[mSlice] = static_cast<int64_t>(accelSteps) * 1000;
-
-//     if (stpTimer[mSlice].alarm_id == 0) {
-//         if (get_core_num() == 1) {
-//             alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, stepper_timer_callback<2>, this, &stpTimer[mSlice]);
-//         } else {
-//             add_repeating_timer_ms(-mPeriodMs, stepper_timer_callback<2>, this, &stpTimer[mSlice]);
-//         }
-//     }
-// }
 
 void Stepper::setPos(const int32_t currentSteps) {
     stpPos[mSlice] = currentSteps;

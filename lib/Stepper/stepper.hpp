@@ -27,7 +27,7 @@ public:
      * @param periodMs The period in milliseconds for the stepper motor movement.
      */
     Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
-
+    
     /**
      * Sets the acceleration steps for the stepper motor.
      *
@@ -221,10 +221,6 @@ private:
     // PWM slice number
     const uint mSlice;
 
-    // Convert radians to steps
-    int32_t radsToSteps(const float rads);
-    // Convert steps to radians
-    float stepsToRads(const int32_t steps);
     // Current speed in steps per second
     int32_t mSpeed = 0;
 
@@ -247,6 +243,9 @@ private:
 
     // Initialize the PWM settings
     void initPwm();
+    // Convert radians to steps
+    int32_t radsToSteps(const float rads);
+    // Convert steps to radians
+    float stepsToRads(const int32_t steps);
 };
-
 #endif // __STEPPER_HPP__
