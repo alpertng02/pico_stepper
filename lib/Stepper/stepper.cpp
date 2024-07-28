@@ -29,9 +29,9 @@ static volatile int64_t stpAccelFp[8] {};
 
 static repeating_timer stpTimer[8] {};
 
-template <uint pul>
+
+template <uint slice>
 static bool stepper_timer_callback(repeating_timer* rt) {
-    const uint slice = pwm_gpio_to_slice_num(pul);
     Stepper* stepper = static_cast<Stepper*>(rt->user_data);
 
     const int64_t speedFp = stpSpeedFp[slice];
@@ -51,7 +51,7 @@ static bool stepper_timer_callback(repeating_timer* rt) {
     accelAmountFp *= targetSpeedFp >= speedFp ? 1 : -1;
     int64_t changedSpeedFp = speedFp + accelAmountFp;
     changedSpeedFp = Stepper::IsInBounds(changedSpeedFp, targetSpeedFp - llabs(accelAmountFp), targetSpeedFp + llabs(accelAmountFp)) ? targetSpeedFp : changedSpeedFp;
-    // printf("Slice %u, Pos %ld, Speed %lld, Accel %lld\n", slice, stpPos[slice], speedFp, accelAmountFp);
+    printf("Slice %u, Pos %ld, Speed %lld, Accel %lld\n", slice, stpPos[slice], speedFp, accelAmountFp);
     stepper->setSpeedFp(changedSpeedFp);
     return true;
 }
@@ -223,9 +223,9 @@ void Stepper::enable(const bool en) {
         } else {
             if (stpTimer[mSlice].alarm_id == 0) {
                 if (get_core_num() == 1) {
-                    alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, stepper_timer_callback<2>, this, &stpTimer[mSlice]);
+                    alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
                 } else {
-                    add_repeating_timer_ms(-mPeriodMs, stepper_timer_callback<2>, this, &stpTimer[mSlice]);
+                    add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
                 }
             }
         }
@@ -280,3 +280,25 @@ float Stepper::stepsToRads(const int32_t steps) {
     return static_cast<float>((steps * 2.0f * mPi) / mStepsPerRev);
 }
 
+repeating_timer_callback_t Stepper::getTimerCallback() {
+    switch (mSlice) {
+        case 0:
+            return stepper_timer_callback<0>;
+        case 1:
+            return stepper_timer_callback<1>;
+        case 2:
+            return stepper_timer_callback<2>;
+        case 3:
+            return stepper_timer_callback<3>;
+        case 4:
+            return stepper_timer_callback<4>;
+        case 5:
+            return stepper_timer_callback<5>;
+        case 6:
+            return stepper_timer_callback<6>;
+        case 7:
+            return stepper_timer_callback<7>;
+        default:
+            return nullptr;
+    }
+}

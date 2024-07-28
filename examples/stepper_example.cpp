@@ -7,18 +7,19 @@ int main() {
 
     stdio_init_all();
     sleep_ms(1000);
-    Stepper stepper(2, 3, 400, 10);
-    
+    Stepper stepper[2] { { 2, 3, 400, 10 }, { 6, 7, 400, 5 } };
+
     printf("Enter =>  pos, speed, accel:\n");
     while (true) {
+        int i {};
         int32_t pos {}, speed {}, accel {};
-        scanf("%ld %ld %ld", &pos, &speed, &accel);
+        scanf("%d %ld %ld %ld", &i, &pos, &speed, &accel);
 
-        stepper.setAccel(accel);
-        stepper.setTargetSpeed(speed);
-        stepper.setTargetPos(pos);
+        stepper[i].setAccel(accel);
+        stepper[i].setTargetSpeed(speed);
+        stepper[i].setTargetPos(pos);
 
-        stepper.enable(true);
+        stepper[i].enable(true);
 
         sleep_ms(10);
     }

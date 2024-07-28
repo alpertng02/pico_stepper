@@ -2,6 +2,7 @@
 #define __STEPPER_HPP__
 
 #include "hardware/gpio.h"
+#include "pico/time.h"
 
 /**
  * @brief Stepper class for controlling a stepper motor.
@@ -247,5 +248,7 @@ private:
     int32_t radsToSteps(const float rads);
     // Convert steps to radians
     float stepsToRads(const int32_t steps);
+
+    repeating_timer_callback_t getTimerCallback();
 };
 #endif // __STEPPER_HPP__
