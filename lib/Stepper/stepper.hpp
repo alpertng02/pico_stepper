@@ -29,6 +29,32 @@ public:
     Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
 
     /**
+     * Sets the acceleration steps for the stepper motor.
+     *
+     *   This function sets the acceleration factor for the stepper motor. The acceleration factor
+     * determines how quickly the stepper motor reaches its maximum speed. A higher acceleration
+     * factor will result in a faster acceleration, while a lower acceleration factor will result
+     * in a slower acceleration.
+     *
+     * @param accelSteps The number of acceleration steps to set.
+     */
+    void setAccel(const int32_t accelSteps);
+
+    /**
+     * Sets the acceleration of the stepper motor.
+     *
+     * @param accelRads The acceleration value in radians per second squared.
+     */
+    void setAccel(const float accelRads);
+
+    /**
+     * @brief Sets the acceleration factor for the stepper motor.
+     *
+     * @param accelFp The acceleration factor to set, specified as a fixed-point number.
+     */
+    void setAccelFp(const int64_t accelFp);
+
+    /**
       * @brief Sets the speed of the stepper motor.
       *
       * This function sets the speed of the stepper motor by calculating the appropriate clock division
@@ -58,6 +84,10 @@ public:
      */
     void setSpeedFp(const int64_t stepFp);
 
+    void setTargetSpeed(const int32_t targetSpeed);
+    void setTargetSpeed(const float targetSpeed);
+    void setTargetSpeedFp(const int64_t targetSpeedFp);
+
     /**
      * Sets the target position of the stepper motor in steps.
      *
@@ -75,7 +105,7 @@ public:
      * @param targetRads The target position in radians.
      */
     void setTargetPos(const float targetRads);
-    
+
     /**
      * @brief Sets the direction of the stepper motor.
      *
@@ -128,7 +158,7 @@ public:
      */
     void setPos(const float currentRads);
 
-    
+
     /**
      * @brief Gets the current position of the stepper motor.
      *
@@ -138,11 +168,11 @@ public:
 
     /**
      * @brief Get the current position of the stepper motor in radians.
-     * 
+     *
      * @return The current position of the stepper motor in radians.
      */
     float getPosRads();
-    
+
     /**
      * Calculates the radians per step for a given number of steps per revolution.
      *

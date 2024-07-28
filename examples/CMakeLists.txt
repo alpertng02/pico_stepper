@@ -5,6 +5,8 @@ target_link_libraries(stepper_example
     pico-stepper
 )
 
+target_compile_options(stepper_example PRIVATE -Wall -Wextra -Werror)
+
 pico_add_extra_outputs(stepper_example)
 
 # enable usb output, disable uart output

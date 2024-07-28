@@ -5,21 +5,21 @@
 
 int main() {
 
-    Stepper stepper(2, 3, 400);
+    stdio_init_all();
+    sleep_ms(1000);
+    Stepper stepper(2, 3, 400, 10);
     
-    bool stepperDir = true;
-    stepper.enable(true);
+    printf("Enter =>  pos, speed, accel:\n");
     while (true) {
+        int32_t pos {}, speed {}, accel {};
+        scanf("%ld %ld %ld", &pos, &speed, &accel);
 
-        for (int32_t i = 0; i < 5000; i++) {
-            stepper.setSpeed(i);
-            sleep_ms(1);
-        }
-        for (int32_t i = 5000; i > 0; i++) {
-            stepper.setSpeed(i);
-            sleep_ms(1);
-        }
-        stepperDir = !stepperDir;
-        stepper.setDir(stepperDir);
+        stepper.setAccel(accel);
+        stepper.setTargetSpeed(speed);
+        stepper.setTargetPos(pos);
+
+        stepper.enable(true);
+
+        sleep_ms(10);
     }
 }
