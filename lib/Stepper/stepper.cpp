@@ -9,6 +9,7 @@
 #include "hardware/clocks.h"
 #include "pico/time.h"
 #include "pico/platform.h"
+#include "pico/float.h"
 #include <cmath>
 #include <cstdio>
 
@@ -27,6 +28,8 @@ static volatile int64_t stpSpeedFp[8] {};
 static volatile int64_t stpTargetSpeedFp[8] {};
 static volatile int64_t stpAccelFp[8] {};
 
+static volatile int32_t stpDeaccelSteps[8] {};
+
 static repeating_timer stpTimer[8] {};
 
 
@@ -42,6 +45,7 @@ static bool stepper_timer_callback(repeating_timer* rt) {
     if (remainingSteps * stpDir[slice] < 0) {
         if (Stepper::IsInBounds(speedFp, -accelAmountFp, accelAmountFp)) {
             stepper->setDir(stpDir[slice] > 0 ? false : true);
+            stepper->startMotion(stpTargetPos[slice], stpAccelFp[slice], 1000);
             return true;
         } else {
             targetSpeedFp = 0;
@@ -69,7 +73,7 @@ static void stepper_pwm_callback(void) {
             stpPos[slice] += stpDir[slice];
 
             // printf("Slice %u, Pos %ld\n", slice, stpPos[slice]);
-            if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice] ) {
+            if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice]) {
                 stpPosSet[slice] = false;
                 stpSpeedFp[slice] = 0;
                 pwm_set_enabled(slice, false);
@@ -233,6 +237,25 @@ void Stepper::enable(const bool en) {
     pwm_set_enabled(mSlice, en);
 }
 
+void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs, const bool start) {
+    setAccel(accelSteps);
+    setTargetPos(targetPosSteps);
+
+    const int32_t targetSpeed = abs(calculateTargetSpeed(targetPosSteps - stpPos[mSlice], stpSpeedFp[mSlice] / 1000, accelSteps, timeMs));
+    setTargetSpeed(targetSpeed);
+    
+    stpDeaccelSteps[mSlice] = getStepIncrease(targetSpeed, -abs(accelSteps), timeMs);
+    enable(start);
+}
+
+void Stepper::startMotion(const float targetPosRads, const float accelRads, const float sec, const bool start) {
+    startMotion(radsToSteps(targetPosRads), radsToSteps(accelRads), static_cast<uint32_t>(sec * 1000), start);
+}
+
+bool Stepper::isMoving() {
+    return stpTimer[mSlice].alarm_id != 0;
+}
+
 Stepper::~Stepper() {
     pwm_set_irq_enabled(mSlice, false);
     pwm_set_enabled(mSlice, false);
@@ -280,25 +303,58 @@ float Stepper::stepsToRads(const int32_t steps) {
     return static_cast<float>((steps * 2.0f * mPi) / mStepsPerRev);
 }
 
+int32_t Stepper::calculateTargetSpeed(const int32_t deltaSteps, const int32_t initialSpeed, const int32_t accel, const uint32_t timeMs) {
+    const float deltaT=  timeMs / 1000.0f;
+    const float a=  1;
+    const float b=  (2.0f * initialSpeed + deltaT * 2.0f * accel) / (-2.0f);
+    const float c=  (-(initialSpeed * initialSpeed) - 2 * accel * deltaSteps) / (-2.0f);
+
+    const float disc=  b * b - 4 * a * c;
+    if (disc > 0) {
+        float vf1 = (-b - sqrtf(disc)) / (2.0f * a);
+        if (vf1 / accel > deltaT / 2.0f) {
+            vf1 = (-b + sqrtf(disc)) / (2.0f * a);
+        }
+        if(vf1 < initialSpeed) {
+            return static_cast<int32_t>((deltaSteps - initialSpeed * initialSpeed / (2.0f * accel)) / (deltaT - initialSpeed / static_cast<float>(accel)));
+        } else {
+            return static_cast<int32_t>(vf1);
+        }
+    } 
+    return 0;
+}
+
+int32_t Stepper::getStepIncrease(const int32_t currentSpeed, const int32_t currentAccel, const uint32_t timeMs) {
+    const int64_t accelPart { static_cast<int64_t>(currentAccel) * timeMs * timeMs};
+    const int64_t speedPart { static_cast<int64_t>(currentSpeed) * timeMs };
+    const int32_t pos = static_cast<int32_t>((accelPart / (1000 * 1000 * 2)) + (speedPart / 1000));
+    return pos;
+}
+
+int32_t Stepper::getSpeedIncrease(const int32_t currentAccel, const uint32_t timeMs) {
+    const int32_t accelPart { static_cast<int32_t>(((currentAccel * timeMs) / 1000)) };
+    return accelPart;
+}
+
 repeating_timer_callback_t Stepper::getTimerCallback() {
     switch (mSlice) {
-        case 0:
-            return stepper_timer_callback<0>;
-        case 1:
-            return stepper_timer_callback<1>;
-        case 2:
-            return stepper_timer_callback<2>;
-        case 3:
-            return stepper_timer_callback<3>;
-        case 4:
-            return stepper_timer_callback<4>;
-        case 5:
-            return stepper_timer_callback<5>;
-        case 6:
-            return stepper_timer_callback<6>;
-        case 7:
-            return stepper_timer_callback<7>;
-        default:
-            return nullptr;
+    case 0:
+        return stepper_timer_callback<0>;
+    case 1:
+        return stepper_timer_callback<1>;
+    case 2:
+        return stepper_timer_callback<2>;
+    case 3:
+        return stepper_timer_callback<3>;
+    case 4:
+        return stepper_timer_callback<4>;
+    case 5:
+        return stepper_timer_callback<5>;
+    case 6:
+        return stepper_timer_callback<6>;
+    case 7:
+        return stepper_timer_callback<7>;
+    default:
+        return nullptr;
     }
 }

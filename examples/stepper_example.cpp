@@ -9,17 +9,14 @@ int main() {
     sleep_ms(1000);
     Stepper stepper[2] { { 2, 3, 400, 10 }, { 6, 7, 400, 5 } };
 
-    printf("Enter =>  pos, speed, accel:\n");
+    printf("Enter =>  index pos accel ms:\n");
     while (true) {
         int i {};
-        int32_t pos {}, speed {}, accel {};
-        scanf("%d %ld %ld %ld", &i, &pos, &speed, &accel);
+        int32_t pos {}, accel {};
+        uint32_t ms {};
+        scanf("%d %ld %ld %lu", &i, &pos, &accel, &ms);
 
-        stepper[i].setAccel(accel);
-        stepper[i].setTargetSpeed(speed);
-        stepper[i].setTargetPos(pos);
-
-        stepper[i].enable(true);
+        stepper[i].startMotion(pos, accel, ms);
 
         sleep_ms(10);
     }
