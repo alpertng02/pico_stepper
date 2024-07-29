@@ -10,6 +10,8 @@ project(pico_stepper_dm860h VERSION 1.0 LANGUAGES C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+add_compile_options(-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable)
+
 # Initialize the Pico SDK
 pico_sdk_init()
 

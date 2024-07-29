@@ -1,3 +1,4 @@
+
 # Add the executable for the stepper example
 add_executable(stepper_example stepper_example.cpp)
 
@@ -7,14 +8,32 @@ target_link_libraries(stepper_example
     pico-stepper
 )
 
-# Set compile options for the stepper example
-target_compile_options(stepper_example PRIVATE -Wall -Wextra -Werror)
-
 # Add extra outputs for the stepper example
 pico_add_extra_outputs(stepper_example)
 
 # Enable USB output, disable UART output
 pico_enable_stdio_usb(stepper_example 1)
 pico_enable_stdio_uart(stepper_example 0)
+
+#--------------------------------------------------------------
+
+# Add the executable for the stepper example
+add_executable(arm_test arm_test.cpp)
+
+# Link the necessary libraries to the stepper example
+target_link_libraries(arm_test 
+    pico_stdlib
+    pico-stepper
+)
+
+# Add extra outputs for the stepper example
+pico_add_extra_outputs(arm_test)
+
+# Enable USB output, disable UART output
+pico_enable_stdio_usb(arm_test 1)
+pico_enable_stdio_uart(arm_test 0)
+
+
+
 
 

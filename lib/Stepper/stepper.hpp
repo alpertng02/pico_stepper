@@ -36,7 +36,7 @@ public:
      * @param pulPin The GPIO pin number for the PUL pin.
      * @param dirPin The GPIO pin number for the DIR pin.
      * @param stepsPerRev The number of steps per revolution for the stepper motor.
-     * @param periodMs The period in milliseconds for the stepper motor movement.
+     * @param periodMs The period in microseconds for the stepper motor movement.
      */
     Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5000);
 
