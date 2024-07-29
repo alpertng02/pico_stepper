@@ -56,6 +56,16 @@ public:
     void setAccelFp(const int64_t accelFp);
 
     /**
+     * @brief Sets the number of steps for deceleration.
+     *
+     * This function sets the number of steps that the stepper motor will take to decelerate
+     * to a stop. 
+     *
+     * @param deaccelSteps The number of steps for deceleration.
+     */
+    void setDeaccelSteps(const int32_t deaccelSteps);
+    
+    /**
       * @brief Sets the speed of the stepper motor.
       *
       * This function sets the speed of the stepper motor by calculating the appropriate clock division
@@ -72,18 +82,6 @@ public:
      * @param rad The desired speed of the stepper motor in radians per second.
      */
     void setSpeed(const float rad);
-
-    /**
-     * Sets the speed of the stepper motor in fixed-point format.
-     *
-     * This function calculates the appropriate clock frequency and clock divider
-     * based on the desired step frequency in fixed-point format. It adjusts the
-     * clock divider and clock frequency to ensure that the step frequency falls
-     * within the acceptable range.
-     *
-     * @param stepFp The desired step frequency in fixed-point format.
-     */
-    void setSpeedFp(const int64_t stepFp);
 
     /**
      * @brief Sets the target speed for the stepper motor.
@@ -103,15 +101,9 @@ public:
      */
     void setTargetSpeed(const float targetSpeed);
 
-    /**
-     * @brief Sets the target speed for the stepper motor.
-     *
-     * This function sets the target speed for the stepper motor. The speed is specified as a fixed-point value
-     * represented by the `targetSpeedFp` parameter.
-     *
-     * @param targetSpeedFp The target speed in fixed-point format.
-     */
-    void setTargetSpeedFp(const int64_t targetSpeedFp);
+    int32_t getActualSpeed();
+
+    float getActualSpeedRads();
 
     /**
      * Sets the target position of the stepper motor in steps.
@@ -119,7 +111,6 @@ public:
      * @param targetSteps The target position in steps.
      */
     void setTargetPos(const int32_t targetSteps);
-
 
     /**
      * @brief Sets the target position for the stepper motor.
@@ -155,7 +146,6 @@ public:
      */
     void enable(const bool en);
 
-
     /**
      * @brief Sets the current position of the stepper motor.
      *
@@ -175,7 +165,6 @@ public:
      */
     void setPos(const float currentRads);
 
-
     /**
      * @brief Gets the current position of the stepper motor.
      *
@@ -189,7 +178,6 @@ public:
      * @return The current position of the stepper motor in radians.
      */
     float getPosRads();
-
 
     /**
      * Calculates and sets the trajectory of the linear speed controlled stepper motor in steps units.
@@ -213,11 +201,11 @@ public:
 
     /**
      * @brief Checks if the stepper motor is currently moving.
-     * 
+     *
      * @return true if the stepper motor is moving, false otherwise.
      */
     bool isMoving();
-    
+
     /**
      * Calculates the radians per step for a given number of steps per revolution.
      *
@@ -238,19 +226,6 @@ public:
         return stepsPerRev / (2.0f * mPi);
     }
 
-    /**
-     * Checks if a value is within a specified range.
-     *
-     * @tparam T The type of the value and range boundaries.
-     * @param value The value to check.
-     * @param low The lower bound of the range.
-     * @param high The upper bound of the range.
-     * @return True if the value is within the range, false otherwise.
-     */
-    template <typename T>
-    static bool IsInBounds(const T& value, const T& low, const T& high) {
-        return !(value < low) && !(high < value);
-    }
 
     /**
      * Destructor for the Stepper class.
@@ -267,8 +242,11 @@ private:
     const uint mSlice;
 
     // Current speed in steps per second
-    int32_t mSpeed = 0;
-
+    volatile int64_t mSpeedFp = 0;
+    volatile int32_t mTargetSpeedFp = 0;
+    volatile int64_t mAccelFp = 0;
+    volatile int32_t mDeaccelSteps = 0;
+    
     // Number of steps per revolution
     const uint mStepsPerRev = 400;
     // Control period in milliseconds
@@ -293,6 +271,29 @@ private:
     // Convert steps to radians
     float stepsToRads(const int32_t steps);
 
+
+    /**
+     * Sets the speed of the stepper motor in fixed-point format.
+     *
+     * This function calculates the appropriate clock frequency and clock divider
+     * based on the desired step frequency in fixed-point format. It adjusts the
+     * clock divider and clock frequency to ensure that the step frequency falls
+     * within the acceptable range.
+     *
+     * @param stepFp The desired step frequency in fixed-point format.
+     */
+    void setSpeedFp(const int64_t stepFp);
+
+    /**
+     * @brief Sets the target speed for the stepper motor.
+     *
+     * This function sets the target speed for the stepper motor. The speed is specified as a fixed-point value
+     * represented by the `targetSpeedFp` parameter.
+     *
+     * @param targetSpeedFp The target speed in fixed-point format.
+     */
+    void setTargetSpeedFp(const int64_t targetSpeedFp);
+    
     /**
      * @brief Retrieves the repeating timer callback function.
      *
@@ -332,6 +333,26 @@ private:
      * @return The calculated speed increase.
      */
     int32_t getSpeedIncrease(const int32_t currentAccel, const uint32_t timeMs);
+
+    /**
+     * Checks if a value is within a specified range.
+     *
+     * @tparam T The type of the value and range boundaries.
+     * @param value The value to check.
+     * @param low The lower bound of the range.
+     * @param high The upper bound of the range.
+     * @return True if the value is within the range, false otherwise.
+     */
+    template <typename T>
+    static bool IsInBounds(const T& value, const T& low, const T& high) {
+        return !(value < low) && !(high < value);
+    }
+
+
+    
+    template <uint slice>
+    friend bool stepper_timer_callback(repeating_timer* rt);
+    
 
 };
 #endif // __STEPPER_HPP__

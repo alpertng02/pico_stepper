@@ -17,7 +17,6 @@ int main() {
         scanf("%d %ld %ld %lu", &i, &pos, &accel, &ms);
 
         stepper[i].startMotion(pos, accel, ms);
-
         sleep_ms(10);
     }
 }
