@@ -51,7 +51,7 @@ private:
         { 6, 7, 400, 10000 },
         { 8, 9, 2000, 10000 }
     };
-    Rads armRads {};
+    RoboticArm::Rads armRads {};
 
     static constexpr float gearRatio[3] { 50.0f, 68.181818f, 2.f };
     static constexpr uint32_t stepsPerRev[3] { 400, 400, 2000 };
