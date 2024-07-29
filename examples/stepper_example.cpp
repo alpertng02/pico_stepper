@@ -1,3 +1,14 @@
+/**
+ *@file stepper_example.cpp
+ * @author Alper Tunga Güven (alpert.guven@gmail.com)
+ * @brief 
+ * @version 0.1
+ * @date 2024-07-29
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
+
 #include "pico/stdlib.h"
 #include <cstdio>
 
