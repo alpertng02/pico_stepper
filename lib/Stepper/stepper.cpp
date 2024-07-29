@@ -1,7 +1,14 @@
 /**
- * @file stepper.cpp
- * @brief Implementation of the Stepper class for controlling a stepper motor using Raspberry Pi Pico.
+ *@file stepper.cpp
+ * @author Alper Tunga Güven (alpert.guven@gmail.com)
+ * @brief Linear stepper motor driver for Raspberry Pi Pico
+ * @version 0.1
+ * @date 2024-07-29
+ * 
+ * @copyright Copyright (c) 2024
+ * 
  */
+
 #include "stepper.hpp"
 
 #include "hardware/pwm.h"
@@ -11,8 +18,10 @@
 #include "pico/platform.h"
 #include "pico/float.h"
 #include <cmath>
-#include <cstdio>
 
+#ifdef DEBUG
+#include <cstdio>
+#endif
 static alarm_pool* alarmPoolForCore1 = nullptr;
 
 static volatile int stpCount = 0;
@@ -52,7 +61,9 @@ static bool stepper_timer_callback(repeating_timer* rt) {
     accelAmountFp *= targetSpeedFp >= speedFp ? 1 : -1;
     int64_t changedSpeedFp = speedFp + accelAmountFp;
     changedSpeedFp = Stepper::IsInBounds(changedSpeedFp, targetSpeedFp - llabs(accelAmountFp), targetSpeedFp + llabs(accelAmountFp)) ? targetSpeedFp : changedSpeedFp;
-    printf("Slice %u, Pos %ld, Speed %lld, Accel %lld\n", slice, stpPos[slice], speedFp, accelAmountFp);
+#ifdef DEBUG
+    printf("Slice %u, Speed %ld, Target Speed %ld, Accel Amount %ld\n", slice, speedFp, targetSpeedFp, accelAmountFp);
+#endif
     stepper->setSpeedFp(changedSpeedFp);
     return true;
 }
@@ -225,6 +236,9 @@ void Stepper::enable(const bool en) {
             }
         }
     }
+    if (!en) {
+        cancel_repeating_timer(&stpTimer[mSlice]);
+    }
     pwm_set_enabled(mSlice, en);
 }
 
@@ -282,9 +296,9 @@ void Stepper::initPwm() {
 
     enable(false);
 
-    // #ifdef DEBUG
-    // printf("Pwm %u => SysClockSpeed: %lu, PwmClockSpeed: %lu, ClockDiv: %.2f\n", mPul, mSysClockHz, mClockHz, mClockDiv);
-    // #endif
+    #ifdef DEBUG
+    printf("Pwm %u => SysClockSpeed: %lu, PwmClockSpeed: %lu, ClockDiv: %.2f\n", mPul, mSysClockHz, mClockHz, mClockDiv);
+    #endif
 }
 
 int32_t Stepper::radsToSteps(const float rads) {

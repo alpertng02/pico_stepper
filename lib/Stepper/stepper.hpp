@@ -1,3 +1,14 @@
+/**
+ *@file stepper.hpp
+ * @author Alper Tunga Güven (alpert.guven@gmail.com)
+ * @brief Linear stepper motor driver for Raspberry Pi Pico
+ * @version 0.1
+ * @date 2024-07-29
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
+
 #ifndef __STEPPER_HPP__
 #define __STEPPER_HPP__
 
