@@ -27,7 +27,7 @@ public:
      * @param stepsPerRev The number of steps per revolution for the stepper motor.
      * @param periodMs The period in milliseconds for the stepper motor movement.
      */
-    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
+    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5000);
 
     /**
      * Sets the acceleration steps for the stepper motor.
@@ -101,8 +101,20 @@ public:
      */
     void setTargetSpeed(const float targetSpeed);
 
+    /**
+     * @brief Gets the actual speed of the stepper motor.
+     *
+     * This function returns the current speed of the stepper motor in steps per second.
+     *
+     * @return The actual speed of the stepper motor in steps per second.
+     */
     int32_t getActualSpeed();
 
+    /**
+     * @brief Gets the actual speed of the stepper motor in radians per second.
+     *
+     * @return The actual speed of the stepper motor in radians per second.
+     */
     float getActualSpeedRads();
 
     /**
@@ -180,6 +192,15 @@ public:
     float getPosRads();
 
     /**
+     * @brief Sets the timer period for the stepper motor speed control.
+     *
+     * This function sets the timer period in microseconds for the stepper motor speed control. A smaller period means a smoother control but requires more CPU time.
+     *
+     * @param periodMs The desired timer period in microseconds.
+     */
+    void setTimerPeriod(const uint32_t periodMs);
+    
+    /**
      * Calculates and sets the trajectory of the linear speed controlled stepper motor in steps units.
      *
      * @param targetPosSteps The target position in steps.
@@ -241,16 +262,19 @@ private:
     // PWM slice number
     const uint mSlice;
 
-    // Current speed in steps per second
+    // Current speed in steps per second scaled by 1000.
     volatile int64_t mSpeedFp = 0;
+    // Target speed in steps per second scaled by 1000.
     volatile int32_t mTargetSpeedFp = 0;
+    // Acceleration in steps per second scaled by 1000.
     volatile int64_t mAccelFp = 0;
+    // Steps it will take for stepper to fully stop.
     volatile int32_t mDeaccelSteps = 0;
     
     // Number of steps per revolution
     const uint mStepsPerRev = 400;
-    // Control period in milliseconds
-    const uint32_t mPeriodMs = 1;
+    // Control period in microseconds
+    uint32_t mPeriodUs = 1;
 
     // Clock frequency in Hz
     uint32_t mClockHz = 125 * 1000 * 1000;

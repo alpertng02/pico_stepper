@@ -80,8 +80,8 @@ void stepper_pwm_callback(void) {
     }
 }
 
-Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev, const uint32_t periodMs) :
-    mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev), mPeriodMs(periodMs) {
+Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev, const uint32_t periodUs) :
+    mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev), mPeriodUs(periodUs) {
     stpSlice[stpCount] = mSlice;
     stpPos[mSlice] = 0;
     stpPosSet[mSlice] = false;
@@ -97,6 +97,11 @@ Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRe
     if (get_core_num() == 1 && alarmPoolForCore1 == nullptr) {
         alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
     }
+}
+
+void Stepper::setTimerPeriod(const uint32_t periodUs) {
+    mPeriodUs = periodUs;
+    stpTimer[mSlice].delay_us = -mPeriodUs;
 }
 
 void Stepper::setAccel(const int32_t accelSteps) {
@@ -213,9 +218,9 @@ void Stepper::enable(const bool en) {
             if (stpTimer[mSlice].alarm_id == 0) {
                 mSpeedFp = 0;
                 if (get_core_num() == 1) {
-                    alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
+                    alarm_pool_add_repeating_timer_us(alarmPoolForCore1, -mPeriodUs, getTimerCallback(), this, &stpTimer[mSlice]);
                 } else {
-                    add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
+                    add_repeating_timer_us(-mPeriodUs, getTimerCallback(), this, &stpTimer[mSlice]);
                 }
             }
         }
