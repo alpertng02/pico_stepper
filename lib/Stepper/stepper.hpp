@@ -38,7 +38,7 @@ public:
      * @param stepsPerRev The number of steps per revolution for the stepper motor.
      * @param periodMs The period in microseconds for the stepper motor movement.
      */
-    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5000);
+    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodUs = 5000);
 
     /**
      * Sets the acceleration steps for the stepper motor.
@@ -93,6 +93,18 @@ public:
      * @param rad The desired speed of the stepper motor in radians per second.
      */
     void setSpeed(const float rad);
+
+    /**
+     * Sets the speed of the stepper motor in fixed-point format.
+     *
+     * This function calculates the appropriate clock frequency and clock divider
+     * based on the desired step frequency in fixed-point format. It adjusts the
+     * clock divider and clock frequency to ensure that the step frequency falls
+     * within the acceptable range.
+     *
+     * @param stepFp The desired step frequency in fixed-point format.
+     */
+    void setSpeedFp(const int64_t stepFp);
 
     /**
      * @brief Sets the target speed for the stepper motor.
@@ -265,6 +277,20 @@ public:
      */
     ~Stepper();
 
+    /**
+     * Checks if a value is within a specified range.
+     *
+     * @tparam T The type of the value and range boundaries.
+     * @param value The value to check.
+     * @param low The lower bound of the range.
+     * @param high The upper bound of the range.
+     * @return True if the value is within the range, false otherwise.
+     */
+    template <typename T>
+    static bool IsInBounds(const T& value, const T& low, const T& high) {
+        return !(value < low) && !(high < value);
+    }
+
 private:
     // Pin for the pulse signal
     const uint mPul;
@@ -272,20 +298,11 @@ private:
     const uint mDir;
     // PWM slice number
     const uint mSlice;
-
-    // Current speed in steps per second scaled by 1000.
-    volatile int64_t mSpeedFp = 0;
-    // Target speed in steps per second scaled by 1000.
-    volatile int32_t mTargetSpeedFp = 0;
-    // Acceleration in steps per second scaled by 1000.
-    volatile int64_t mAccelFp = 0;
-    // Steps it will take for stepper to fully stop.
-    volatile int32_t mDeaccelSteps = 0;
     
     // Number of steps per revolution
     const uint mStepsPerRev = 400;
     // Control period in microseconds
-    uint32_t mPeriodUs = 1;
+    uint32_t mPeriodUs = 5000;
 
     // Clock frequency in Hz
     uint32_t mClockHz = 125 * 1000 * 1000;
@@ -307,17 +324,6 @@ private:
     float stepsToRads(const int32_t steps);
 
 
-    /**
-     * Sets the speed of the stepper motor in fixed-point format.
-     *
-     * This function calculates the appropriate clock frequency and clock divider
-     * based on the desired step frequency in fixed-point format. It adjusts the
-     * clock divider and clock frequency to ensure that the step frequency falls
-     * within the acceptable range.
-     *
-     * @param stepFp The desired step frequency in fixed-point format.
-     */
-    void setSpeedFp(const int64_t stepFp);
 
     /**
      * @brief Sets the target speed for the stepper motor.
@@ -369,25 +375,6 @@ private:
      */
     int32_t getSpeedIncrease(const int32_t currentAccel, const uint32_t timeMs);
 
-    /**
-     * Checks if a value is within a specified range.
-     *
-     * @tparam T The type of the value and range boundaries.
-     * @param value The value to check.
-     * @param low The lower bound of the range.
-     * @param high The upper bound of the range.
-     * @return True if the value is within the range, false otherwise.
-     */
-    template <typename T>
-    static bool IsInBounds(const T& value, const T& low, const T& high) {
-        return !(value < low) && !(high < value);
-    }
-
-
-    
-    template <uint slice>
-    friend bool stepper_timer_callback(repeating_timer* rt);
-    
 
 };
 #endif // __STEPPER_HPP__
