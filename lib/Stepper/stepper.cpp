@@ -19,10 +19,6 @@
 #include "pico/float.h"
 #include <cmath>
 
-#ifndef NDEBUG
-#define DEBUG_LOG
-#endif
-
 #ifdef DEBUG_LOG
 #include <cstdio>
 #endif
@@ -76,7 +72,7 @@ static bool stepper_timer_callback(repeating_timer* rt) {
     return true;
 }
 
-void stepper_pwm_callback(void) {
+static void stepper_pwm_callback(void) {
     uint32_t irq = pwm_get_irq_status_mask();
 
     for (int i = 0; i < stpCount; i++) {
@@ -295,6 +291,7 @@ bool Stepper::isMoving() {
 Stepper::~Stepper() {
     pwm_set_irq_enabled(mSlice, false);
     pwm_set_enabled(mSlice, false);
+    cancel_repeating_timer(&stpTimer[mSlice]);
     gpio_deinit(mPul);
     gpio_deinit(mDir);
 }
