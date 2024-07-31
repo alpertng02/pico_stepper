@@ -4,9 +4,9 @@
  * @brief Linear stepper motor driver for Raspberry Pi Pico
  * @version 0.1
  * @date 2024-07-29
- * 
+ *
  * @copyright Copyright (c) 2024
- * 
+ *
  */
 
 #include "stepper.hpp"
@@ -19,9 +19,11 @@
 #include "pico/float.h"
 #include <cmath>
 
-#define DEBUG
+#ifndef NDEBUG
+#define DEBUG_LOG
+#endif
 
-#ifdef DEBUG
+#ifdef DEBUG_LOG
 #include <cstdio>
 #endif
 static alarm_pool* alarmPoolForCore1 = nullptr;
@@ -39,6 +41,8 @@ static volatile int64_t stpSpeedFp[8] {};
 static volatile int64_t stpTargetSpeedFp[8] {};
 static volatile int64_t stpAccelFp[8] {};
 static volatile int32_t stpDeaccelSteps[8] {};
+static volatile int64_t stpStartingSpeedFp[8] {};
+static volatile int64_t stpStoppingSpeedFp[8] {};
 static repeating_timer stpTimer[8] {};
 
 
@@ -50,24 +54,23 @@ static bool stepper_timer_callback(repeating_timer* rt) {
     const int32_t remainingSteps = stpTargetPos[slice] - stpPos[slice];
     int64_t targetSpeedFp = stpTargetSpeedFp[slice];
     int64_t accelAmountFp = (stpAccelFp[slice] * llabs(rt->delay_us)) / 1000000;
-    printf("Slice %u, Speed %lld, Target Speed %lld, Accel Amount %lld\n", slice, speedFp, targetSpeedFp, accelAmountFp);
     if (remainingSteps * stpDir[slice] < 0) {
-        if (Stepper::IsInBounds(speedFp, -accelAmountFp, accelAmountFp)) {
+        if (Stepper::IsInBounds(speedFp, stpStoppingSpeedFp[slice] - accelAmountFp, stpStartingSpeedFp[slice] + accelAmountFp)) {
             stepper->setDir(stpDir[slice] > 0 ? false : true);
             stepper->startMotion(stpTargetPos[slice], stpAccelFp[slice] / 1000, 1000);
             return true;
         } else {
-            targetSpeedFp = 0;
+            targetSpeedFp = stpStoppingSpeedFp[slice];
         }
-    } else if (remainingSteps * stpDir[slice] < stpDeaccelSteps[slice]) {
-        targetSpeedFp = 0;
+    } else if (remainingSteps * stpDir[slice] <= stpDeaccelSteps[slice]) {
+        targetSpeedFp = stpStoppingSpeedFp[slice];
     }
 
     accelAmountFp *= targetSpeedFp >= speedFp ? 1 : -1;
     int64_t changedSpeedFp = speedFp + accelAmountFp;
     changedSpeedFp = Stepper::IsInBounds(changedSpeedFp, targetSpeedFp - llabs(accelAmountFp), targetSpeedFp + llabs(accelAmountFp)) ? targetSpeedFp : changedSpeedFp;
-#ifdef DEBUG
-    printf("Slice %u, Speed %lld, Target Speed %lld, Accel Amount %lld\n", slice, speedFp, targetSpeedFp, accelAmountFp);
+#ifdef DEBUG_LOG
+    printf("Slice %u, Pos %ld, Speed %lld, Target Speed %lld, Accel Amount %lld\n", slice, stpPos[slice], speedFp, targetSpeedFp, accelAmountFp);
 #endif
     stepper->setSpeedFp(changedSpeedFp);
     return true;
@@ -95,8 +98,8 @@ void stepper_pwm_callback(void) {
     }
 }
 
-Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev, const uint32_t periodUs) :
-    mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev), mPeriodUs(periodUs) {
+Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev, const uint32_t periodMs) :
+    mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)), mStepsPerRev(stepsPerRev), mPeriodMs(periodMs) {
     stpSlice[stpCount] = mSlice;
     stpPos[mSlice] = 0;
     stpPosSet[mSlice] = false;
@@ -112,11 +115,13 @@ Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRe
     if (get_core_num() == 1 && alarmPoolForCore1 == nullptr) {
         alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
     }
+    setStartingSpeed(10l);
+    setStoppingSpeed(10l);
 }
 
-void Stepper::setTimerPeriod(const uint32_t periodUs) {
-    mPeriodUs = periodUs;
-    stpTimer[mSlice].delay_us = -mPeriodUs;
+void Stepper::setTimerPeriod(const uint32_t periodMs) {
+    mPeriodMs = periodMs;
+    stpTimer[mSlice].delay_us = -mPeriodMs;
 }
 
 void Stepper::setAccel(const int32_t accelSteps) {
@@ -203,7 +208,23 @@ void Stepper::setTargetSpeed(const float targetSpeed) {
 }
 
 void Stepper::setTargetSpeedFp(const int64_t targetSpeedFp) {
-    stpSpeedFp[mSlice] = targetSpeedFp;
+    stpTargetSpeedFp[mSlice] = targetSpeedFp;
+}
+
+void Stepper::setStartingSpeed(const int32_t steps) {
+    stpStartingSpeedFp[mSlice] = steps * 1000;
+}
+
+void Stepper::setStartingSpeed(const float rads) {
+    setStartingSpeed(radsToSteps(rads));
+}
+
+void Stepper::setStoppingSpeed(const int32_t steps) {
+    stpStoppingSpeedFp[mSlice] = steps * 1000;
+}
+
+void Stepper::setStoppingSpeed(const float rads) {
+    setStoppingSpeed(radsToSteps(rads));
 }
 
 int32_t Stepper::getActualSpeed() {
@@ -230,12 +251,12 @@ void Stepper::enable(const bool en) {
             cancel_repeating_timer(&stpTimer[mSlice]);
             return;
         } else {
-            if (stpTimer[mSlice].alarm_id == 0) {
-                stpSpeedFp[mSlice] = 0;
+            if (!isMoving()) {
+                stpSpeedFp[mSlice] = stpStartingSpeedFp[mSlice];
                 if (get_core_num() == 1) {
-                    alarm_pool_add_repeating_timer_us(alarmPoolForCore1, -mPeriodUs, getTimerCallback(), this, &stpTimer[mSlice]);
+                    alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
                 } else {
-                    add_repeating_timer_us(-mPeriodUs, getTimerCallback(), this, &stpTimer[mSlice]);
+                    add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
                 }
             }
         }
@@ -247,14 +268,19 @@ void Stepper::enable(const bool en) {
 }
 
 void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs, const bool start) {
-    setAccel(accelSteps);
-    setTargetPos(targetPosSteps);
 
     const int32_t targetSpeed = abs(calculateTargetSpeed(targetPosSteps - stpPos[mSlice], stpSpeedFp[mSlice] / 1000, accelSteps, timeMs));
-    setTargetSpeed(targetSpeed);
+#ifdef DEBUG_LOG
+    printf("StartMotion =>  Slice %u, TargetPos %ld, targetSpeed %ld, deaccelSteps %ld\n", mSlice, targetPosSteps, targetSpeed, stpDeaccelSteps[mSlice]);;
+#endif
+    if (targetSpeed == 0) {
+        startMotion(targetPosSteps, accelSteps, timeMs * 3 / 2, start);
+    }
 
+    setTargetPos(targetPosSteps);
+    setTargetSpeed(targetSpeed);
+    setAccel(accelSteps);
     setDeaccelSteps(abs(getStepIncrease(targetSpeed, -abs(accelSteps), static_cast<uint32_t>((targetSpeed * 1000) / accelSteps))));
-    printf("StartMotion =>  Slice %u, TargetPos %ld, targetSpeed %ld, deaccelSteps %ld\n", mSlice, targetPosSteps,targetSpeed, stpDeaccelSteps[mSlice]);
     enable(start);
 }
 
@@ -300,9 +326,9 @@ void Stepper::initPwm() {
 
     enable(false);
 
-    #ifdef DEBUG
+#ifdef DEBUG_LOG
     printf("Pwm %u => SysClockSpeed: %lu, PwmClockSpeed: %lu, ClockDiv: %.2f\n", mPul, mSysClockHz, mClockHz, mClockDiv);
-    #endif
+#endif
 }
 
 int32_t Stepper::radsToSteps(const float rads) {

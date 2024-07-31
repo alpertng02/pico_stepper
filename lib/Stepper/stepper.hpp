@@ -16,15 +16,18 @@
 #include "pico/time.h"
 
 /**
- * @brief Stepper class for controlling a stepper motor.
+ * @brief Stepper class for controlling a stepper motor using a stepper driver.
  *
- * This class provides functions to control a stepper motor using the Raspberry Pi Pico.
- * It uses the PUL and DIR pins to control the stepper motor.
+ *  This class allows non blocking control of a stepper motor using linear speed profile.
+ *  \n  The non-blocking control is achieved by using a repeating timer callback function that calculates the speed of the
+ *  stepper motor based on the desired speed, acceleration, and deceleration and travel duration\n .
+ *  \n  The repeating timer interrupt runs on the same core that creates the class instance so that multiple stepper instances can be controlled from seperate cores\n.
+ *  \n  The position of the stepper motor is kept track using PMW_WRAP_IRQ functionality of RP2040.
+ *  \n Due to the nature of PWM_WRAP_IRQ, each stepper pulse pin should be connected to a seperate PWM slice which means a maximum of 8 steppers can be controlled.
+ * 
+ *  All function related to speed, position and acceleration control have argument overloads for steps and radian units.
+ *  
  *
- * The class provides functions to change the speed of the stepper motor, set the target position,
- * set the direction, enable or disable the stepper motor, and start the motion of the stepper motor.
- *
- * The class also provides functions to set the current position of the stepper motor in steps or radians.
  */
 class Stepper {
 public:
@@ -36,9 +39,9 @@ public:
      * @param pulPin The GPIO pin number for the PUL pin.
      * @param dirPin The GPIO pin number for the DIR pin.
      * @param stepsPerRev The number of steps per revolution for the stepper motor.
-     * @param periodMs The period in microseconds for the stepper motor movement.
+     * @param periodMs The period in milliseconds for the stepper motor movement.
      */
-    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodUs = 5000);
+    Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
 
     /**
      * Sets the acceleration steps for the stepper motor.
@@ -113,7 +116,7 @@ public:
      *
      * @param targetSpeed The target speed to set for the stepper motor.
      */
-    void setTargetSpeed(const int32_t targetSpeed);
+    void setTargetSpeed(const int32_t steps);
 
     /**
      * @brief Sets the target speed for the stepper motor.
@@ -122,7 +125,43 @@ public:
      *
      * @param targetSpeed The target speed to set for the stepper motor.
      */
-    void setTargetSpeed(const float targetSpeed);
+    void setTargetSpeed(const float rads);
+
+    /**
+     * @brief Sets the starting speed for the stepper motor.
+     *
+     * This function sets the starting speed for the stepper motor. The starting speed is the speed at which the motor should start rotating.
+     *
+     * @param steps The starting speed in steps per second.
+     */
+    void setStartingSpeed(const int32_t steps);
+
+    /**
+     * @brief Sets the starting speed for the stepper motor.
+     *
+     * This function sets the starting speed for the stepper motor. The starting speed is the speed at which the motor should start rotating.
+     *
+     * @param rads The starting speed in radians per second.
+     */
+    void setStartingSpeed(const float rads);
+
+    /**
+     * @brief Sets the stopping speed for the stepper motor.
+     *
+     * This function sets the stopping speed for the stepper motor. The stopping speed is the speed at which the motor should stop rotating.
+     *
+     * @param steps The stopping speed in steps per second.
+     */
+    void setStoppingSpeed(const int32_t steps);
+
+    /**
+     * @brief Sets the stopping speed for the stepper motor.
+     *
+     * This function sets the stopping speed for the stepper motor. The stopping speed is the speed at which the motor should stop rotating.
+     *
+     * @param rads The stopping speed in radians per second.
+     */
+    void setStoppingSpeed(const float rads);
 
     /**
      * @brief Gets the actual speed of the stepper motor.
@@ -242,7 +281,7 @@ public:
      * @param start If true, the motion starts immediately. If false, the motion is queued and will start when the previous motion completes.
      */
     void startMotion(const float targetPosRads, const float accelRads, const float timeSec, const bool start = true);
-
+    
     /**
      * @brief Checks if the stepper motor is currently moving.
      *
@@ -301,8 +340,8 @@ private:
     
     // Number of steps per revolution
     const uint mStepsPerRev = 400;
-    // Control period in microseconds
-    uint32_t mPeriodUs = 5000;
+    // Control period in milliseconds
+        uint32_t mPeriodMs = 5;
 
     // Clock frequency in Hz
     uint32_t mClockHz = 125 * 1000 * 1000;
