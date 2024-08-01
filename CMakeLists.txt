@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.13)  # Specify the minimum CMake version requir
 include(pico_sdk_import.cmake)
 
 # Define the project name, version, and supported languages
-project(pico_stepper_dm860h VERSION 1.0 LANGUAGES C CXX ASM)
+project(pico_stepper_control VERSION 1.0 LANGUAGES C CXX ASM)
 
 # Set the C and C++ standards
 set(CMAKE_C_STANDARD 11)

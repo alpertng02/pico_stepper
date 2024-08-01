@@ -4,9 +4,9 @@
  * @brief Linear stepper motor driver for Raspberry Pi Pico
  * @version 0.1
  * @date 2024-07-29
- * 
+ *
  * @copyright Copyright (c) 2024
- * 
+ *
  */
 
 #ifndef __STEPPER_HPP__
@@ -15,20 +15,21 @@
 #include "hardware/gpio.h"
 #include "pico/time.h"
 
-/**
- * @brief Stepper class for controlling a stepper motor using a stepper driver.
- *
- *  This class allows non blocking control of a stepper motor using linear speed profile.
- *  \n  The non-blocking control is achieved by using a repeating timer callback function that calculates the speed of the
- *  stepper motor based on the desired speed, acceleration, and deceleration and travel duration\n .
- *  \n  The repeating timer interrupt runs on the same core that creates the class instance so that multiple stepper instances can be controlled from seperate cores\n.
- *  \n  The position of the stepper motor is kept track using PMW_WRAP_IRQ functionality of RP2040.
- *  \n Due to the nature of PWM_WRAP_IRQ, each stepper pulse pin should be connected to a seperate PWM slice which means a maximum of 8 steppers can be controlled.
- * 
- *  All function related to speed, position and acceleration control have argument overloads for steps and radian units.
- *  
- *
- */
+ /**
+  * @brief Stepper class for controlling a stepper motor using a stepper driver.
+  *
+  *  This class allows non blocking control of a stepper motor using linear speed profile.
+  *  \n  The non-blocking control is achieved by using a repeating timer callback function that calculates the speed of the
+  *  stepper motor based on the desired speed, acceleration, and deceleration and travel duration\n .
+  *  \n  The repeating timer interrupt runs on the same core that creates the class instance so that multiple stepper instances can be controlled from seperate cores\n.
+  *  \n  The position of the stepper motor is kept track using PMW_WRAP_IRQ functionality of RP2040.
+  *  \n Due to the nature of PWM_WRAP_IRQ, each stepper pulse pin should be connected to a seperate PWM slice which means a maximum of 8 steppers can be controlled.
+  *
+  *  All function related to speed, position and acceleration control have argument overloads for steps and radian units.
+  *  \n  Functions ending in Fp are integer step units scaled by 1000. This is to avoid floating point calculations in interrupts.
+  *
+  *
+  */
 class Stepper {
 public:
     /**
@@ -73,12 +74,12 @@ public:
      * @brief Sets the number of steps for deceleration.
      *
      * This function sets the number of steps that the stepper motor will take to decelerate
-     * to a stop. 
+     * to a stop.
      *
      * @param deaccelSteps The number of steps for deceleration.
      */
     void setDeaccelSteps(const int32_t deaccelSteps);
-    
+
     /**
       * @brief Sets the speed of the stepper motor.
       *
@@ -261,7 +262,7 @@ public:
      * @param periodMs The desired timer period in microseconds.
      */
     void setTimerPeriod(const uint32_t periodMs);
-    
+
     /**
      * Calculates and sets the trajectory of the linear speed controlled stepper motor in steps units.
      *
@@ -269,8 +270,10 @@ public:
      * @param accelSteps The acceleration in steps/sec2.
      * @param timeMs The time in milliseconds.
      * @param start Flag indicating whether to start the motion immediately (default: true).
+     *
+     * @return true if the motion trajectory was possible in given motion duration, false otherwise.
      */
-    void startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs, const bool start = true);
+    bool startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs, const bool start = true);
 
     /**
      * Calculates and sets the trajectory of the linear speed controlled stepper motor in radian units.
@@ -279,9 +282,11 @@ public:
      * @param accelRads The acceleration of the stepper motor in radians per second squared.
      * @param timeSec The total time for the motion in seconds.
      * @param start If true, the motion starts immediately. If false, the motion is queued and will start when the previous motion completes.
+     *
+     * @return true if the motion trajectory was possible in given motion duration, false otherwise.
      */
-    void startMotion(const float targetPosRads, const float accelRads, const float timeSec, const bool start = true);
-    
+    bool startMotion(const float targetPosRads, const float accelRads, const float timeSec, const bool start = true);
+
     /**
      * @brief Checks if the stepper motor is currently moving.
      *
@@ -337,11 +342,11 @@ private:
     const uint mDir;
     // PWM slice number
     const uint mSlice;
-    
+
     // Number of steps per revolution
     const uint mStepsPerRev = 400;
     // Control period in milliseconds
-        uint32_t mPeriodMs = 5;
+    uint32_t mPeriodMs = 5;
 
     // Clock frequency in Hz
     uint32_t mClockHz = 125 * 1000 * 1000;
@@ -355,14 +360,33 @@ private:
     // Value of Pi
     static constexpr float mPi = 3.1415926f;
 
-    // Initialize the PWM settings
+    
+    /**
+     * Initializes the PWM (Pulse Width Modulation) for the stepper motor.
+     * This function sets up the necessary configurations and registers to enable PWM control.
+     */
     void initPwm();
-    // Convert radians to steps
+ 
+    /**
+     * Converts radians to steps.
+     *
+     * This function takes a floating-point value representing an angle in radians and converts it to the corresponding number of steps.
+     *
+     * @param rads The angle in radians to be converted.
+     * @return The number of steps corresponding to the given angle.
+     */
     int32_t radsToSteps(const float rads);
-    // Convert steps to radians
+
+    /**
+     * @brief Converts the given number of steps to radians.
+     *
+     * This function takes an integer value representing the number of steps and
+     * converts it to radians. The result is returned as a floating-point value.
+     *
+     * @param steps The number of steps to convert to radians.
+     * @return The equivalent value in radians.
+     */
     float stepsToRads(const int32_t steps);
-
-
 
     /**
      * @brief Sets the target speed for the stepper motor.
@@ -373,7 +397,7 @@ private:
      * @param targetSpeedFp The target speed in fixed-point format.
      */
     void setTargetSpeedFp(const int64_t targetSpeedFp);
-    
+
     /**
      * @brief Retrieves the repeating timer callback function.
      *

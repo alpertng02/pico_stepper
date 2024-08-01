@@ -27,7 +27,11 @@ int main() {
         uint32_t ms {};
         scanf("%d %ld %ld %lu", &i, &pos, &accel, &ms);
 
-        stepper[i].startMotion(pos, accel, ms);
+        if (!stepper[i].startMotion(pos, accel, ms)) {
+            printf("Error: Given trajectory was not possible in the motion duration!\n");
+        } else {
+            printf("Stepper %d started to move to %ld position with %ld acceleration in %lu ms\n", i, pos, accel, ms);
+        }
         sleep_ms(10);
     }
 }

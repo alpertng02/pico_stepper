@@ -39,6 +39,8 @@ static volatile int64_t stpAccelFp[8] {};
 static volatile int32_t stpDeaccelSteps[8] {};
 static volatile int64_t stpStartingSpeedFp[8] {};
 static volatile int64_t stpStoppingSpeedFp[8] {};
+static volatile bool stpAccelSet[8] {};
+static volatile bool stpIsMoving[8] {};
 static repeating_timer stpTimer[8] {};
 
 
@@ -83,9 +85,11 @@ static void stepper_pwm_callback(void) {
             pwm_clear_irq(slice);
 
             stpPos[slice] += stpDir[slice];
-
+            stpIsMoving[slice] = true;
             if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice]) {
                 stpPosSet[slice] = false;
+                stpAccelSet[slice] = false;
+                stpIsMoving[slice] = false;
                 cancel_repeating_timer(&stpTimer[slice]);
                 pwm_set_enabled(slice, false);
                 continue;;
@@ -99,6 +103,7 @@ Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRe
     stpSlice[stpCount] = mSlice;
     stpPos[mSlice] = 0;
     stpPosSet[mSlice] = false;
+    stpAccelSet[mSlice] = false;
     stpDir[mSlice] = true;
     stpCount++;
 
@@ -111,8 +116,8 @@ Stepper::Stepper(const uint pulPin, const uint dirPin, const uint32_t stepsPerRe
     if (get_core_num() == 1 && alarmPoolForCore1 == nullptr) {
         alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
     }
-    setStartingSpeed(10l);
-    setStoppingSpeed(10l);
+    setStartingSpeed(25l);
+    setStoppingSpeed(25l);
 }
 
 void Stepper::setTimerPeriod(const uint32_t periodMs) {
@@ -129,6 +134,7 @@ void Stepper::setAccel(const float accelRads) {
 }
 
 void Stepper::setAccelFp(const int64_t accelFp) {
+    stpAccelSet[mSlice] = true;
     stpAccelFp[mSlice] = accelFp;
 }
 
@@ -247,7 +253,7 @@ void Stepper::enable(const bool en) {
             cancel_repeating_timer(&stpTimer[mSlice]);
             return;
         } else {
-            if (!isMoving()) {
+            if (!isMoving() && stpAccelSet[mSlice]) {
                 stpSpeedFp[mSlice] = stpStartingSpeedFp[mSlice];
                 if (get_core_num() == 1) {
                     alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs, getTimerCallback(), this, &stpTimer[mSlice]);
@@ -259,18 +265,24 @@ void Stepper::enable(const bool en) {
     }
     if (!en) {
         cancel_repeating_timer(&stpTimer[mSlice]);
+        stpIsMoving[mSlice] = false;
+        stpPosSet[mSlice] = false;
+        stpAccelSet[mSlice] = false;
     }
     pwm_set_enabled(mSlice, en);
 }
 
-void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs, const bool start) {
+bool Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps, const uint32_t timeMs, const bool start) {
 
-    const int32_t targetSpeed = abs(calculateTargetSpeed(targetPosSteps - stpPos[mSlice], stpSpeedFp[mSlice] / 1000, accelSteps, timeMs));
+    const int32_t deltaSteps = targetPosSteps - stpPos[mSlice];
+    const int32_t initialSpeed = isMoving() ? stpSpeedFp[mSlice] / 1000 : stpStartingSpeedFp[mSlice] / 1000;
+    const int32_t targetSpeed = abs(calculateTargetSpeed(deltaSteps, initialSpeed, accelSteps, timeMs));
+
 #ifdef DEBUG_LOG
     printf("StartMotion =>  Slice %u, TargetPos %ld, targetSpeed %ld, deaccelSteps %ld\n", mSlice, targetPosSteps, targetSpeed, stpDeaccelSteps[mSlice]);;
 #endif
     if (targetSpeed == 0) {
-        startMotion(targetPosSteps, accelSteps, timeMs * 3 / 2, start);
+        return false;
     }
 
     setTargetPos(targetPosSteps);
@@ -278,14 +290,15 @@ void Stepper::startMotion(const int32_t targetPosSteps, const int32_t accelSteps
     setAccel(accelSteps);
     setDeaccelSteps(abs(getStepIncrease(targetSpeed, -abs(accelSteps), static_cast<uint32_t>((targetSpeed * 1000) / accelSteps))));
     enable(start);
+    return true;
 }
 
-void Stepper::startMotion(const float targetPosRads, const float accelRads, const float sec, const bool start) {
-    startMotion(radsToSteps(targetPosRads), radsToSteps(accelRads), static_cast<uint32_t>(sec * 1000), start);
+bool Stepper::startMotion(const float targetPosRads, const float accelRads, const float sec, const bool start) {
+    return startMotion(radsToSteps(targetPosRads), radsToSteps(accelRads), static_cast<uint32_t>(sec * 1000), start);
 }
 
 bool Stepper::isMoving() {
-    return stpTimer[mSlice].alarm_id != 0;
+    return stpIsMoving[mSlice];
 }
 
 Stepper::~Stepper() {
