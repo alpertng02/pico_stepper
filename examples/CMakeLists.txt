@@ -2,6 +2,8 @@
 # Add the executable for the stepper example
 add_executable(stepper_example stepper_example.cpp)
 
+target_compile_options(stepper_example PRIVATE) 
+
 # Link the necessary libraries to the stepper example
 target_link_libraries(stepper_example 
     pico_stdlib

@@ -177,23 +177,31 @@ void Stepper::setSpeed(const float rad) {
 }
 
 void Stepper::setSpeedFp(const int64_t stepFp) {
-    uint32_t wrap = mClockHz / static_cast<uint32_t>((stepFp / 1000));
-    if (wrap < (0x0001 << 10)) {
-        mClockDiv /= 2.0f;
+    uint32_t wrap = mClockHz / static_cast<uint32_t>(((stepFp > 0) ? stepFp : 1 / 1000));
+    
+    while (wrap < (0x0001 << 10) || wrap > UINT16_MAX) {
+        if (wrap < (0x0001 << 10)) {
+            if(mClockDiv <= 1.0f) {
+                wrap = (0x0001 << 10);
+                break;
+            } else {
+                mClockDiv /= 2.0f;
+                mClockDiv = mClockDiv <= 1.0f ? 1.0f : mClockDiv;
+            }
+        } else if (wrap > UINT16_MAX) {
+            if (mClockDiv >= 255.9f) {
+                wrap = UINT16_MAX;
+                break;
+            } else {
+                mClockDiv *= 2.0f;
+                mClockDiv = mClockDiv >= 255.92f ? 255.92f : mClockDiv;
+            }
+        }
         mClockHz = static_cast<uint32_t>(mSysClockHz / mClockDiv);
         pwm_set_clkdiv(mSlice, mClockDiv);
-        setSpeedFp(stepFp);
-    } else if (wrap > UINT16_MAX) {
-        if (mClockDiv >= 255.9f) {
-            wrap = UINT16_MAX;
-        } else {
-            mClockDiv *= 1.5f;
-            mClockDiv = mClockDiv >= 255.92f ? 255.92f : mClockDiv;
-            mClockHz = static_cast<uint32_t>(mSysClockHz / mClockDiv);
-            pwm_set_clkdiv(mSlice, mClockDiv);
-            setSpeedFp(stepFp);
-        }
+        wrap = mClockHz / static_cast<uint32_t>((stepFp / 1000));
     }
+
     mWrap = wrap;
     stpSpeedFp[mSlice] = stepFp;
 
@@ -302,6 +310,7 @@ bool Stepper::isMoving() {
 }
 
 Stepper::~Stepper() {
+    stpCount--;
     pwm_set_irq_enabled(mSlice, false);
     pwm_set_enabled(mSlice, false);
     cancel_repeating_timer(&stpTimer[mSlice]);
