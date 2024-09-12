@@ -398,6 +398,7 @@ private:
      */
     void setTargetSpeedFp(const int64_t targetSpeedFp);
 
+    
     /**
      * @brief Retrieves the repeating timer callback function.
      *

@@ -19,7 +19,6 @@ int main() {
     stdio_init_all();
     sleep_ms(1000);
     Stepper stepper[2] { { 2, 3, 400, 10 }, { 6, 7, 400, 5 } };
-    Stepper ex(2, 3);
 
     printf("Enter =>  index pos accel ms:\n");
     while (true) {
@@ -27,7 +26,7 @@ int main() {
         int32_t pos {}, accel {}, speed {};
         uint32_t ms {};
         scanf("%d %ld %ld %lu", &i, &pos, &accel, &ms);
-
+        sleep_ms(200);
         if (!stepper[i].startMotion(pos, accel, ms)) {
             printf("Error: Given trajectory was not possible in the motion duration!\n");
         } else {
