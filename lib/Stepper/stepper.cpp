@@ -19,7 +19,7 @@
 #include "pico/time.h"
 #include <cmath>
 
-#define DEBUG_LOG
+// #define DEBUG_LOG
 
 #ifdef DEBUG_LOG
 #include <cstdio>
