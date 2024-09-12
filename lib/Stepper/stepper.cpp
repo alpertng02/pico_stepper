@@ -19,7 +19,7 @@
 #include "pico/time.h"
 #include <cmath>
 
-// #define DEBUG_LOG
+#define DEBUG_LOG
 
 #ifdef DEBUG_LOG
 #include <cstdio>
@@ -229,9 +229,13 @@ void Stepper::setSpeed(const int32_t step) { setSpeedFp(step * 1000); }
 void Stepper::setSpeed(const float rad) { setSpeed(radsToSteps(rad)); }
 
 void Stepper::setSpeedFp(const int64_t stepFp) {
+  // Calculate the wrap value of the pwm counter.
   uint32_t wrap =
       mClockHz / static_cast<uint32_t>(((stepFp > 0) ? stepFp : 1 / 1000));
 
+  // If wrap number overflows 16 bits then increase the clock division amount to
+  // achieve desired pwm frequency. If the wrap value is lower than 2^10, lower
+  // the clock div to increase the precision of the counter wrap.
   while (wrap < (0x0001 << 10) || wrap > UINT16_MAX) {
     if (wrap < (0x0001 << 10)) {
       if (mClockDiv <= 1.0f) {
@@ -258,6 +262,7 @@ void Stepper::setSpeedFp(const int64_t stepFp) {
   mWrap = wrap;
   stpSpeedFp[mSlice] = stepFp;
 
+  // Set the dutycycle to 50% to create equal rectangle waves.
   pwm_set_wrap(mSlice, mWrap);
   pwm_set_gpio_level(mPul, mWrap / 2);
 }

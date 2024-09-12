@@ -18,7 +18,7 @@ int main() {
 
     stdio_init_all();
     sleep_ms(1000);
-    Stepper stepper[2] { { 2, 3, 400, 10 }, { 6, 7, 400, 5 } };
+    Stepper stepper[2] { { 2, 3, 400, 5 }, { 6, 7, 400, 5 } };
 
     printf("Enter =>  index pos accel ms:\n");
     while (true) {
