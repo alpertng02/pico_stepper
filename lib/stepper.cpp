@@ -14,7 +14,6 @@
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
-#include "pico/float.h"
 #include "pico/platform.h"
 #include "pico/time.h"
 #include <cmath>
