@@ -19,7 +19,7 @@
 #include "pico/time.h"
 #include <cmath>
 
-#define DEBUG_LOG
+// #define DEBUG_LOG
 
 #ifdef DEBUG_LOG
 #include <cstdio>
@@ -53,6 +53,7 @@ static volatile int64_t stpAccelFp[8]{};
 static volatile int32_t stpDeaccelSteps[8]{};
 static volatile int64_t stpStartingSpeedFp[8]{};
 static volatile int64_t stpStoppingSpeedFp[8]{};
+static volatile uint32_t stpMotionTimeMs[8]{};
 static volatile bool stpAccelSet[8]{};
 static volatile bool stpIsMoving[8]{};
 static repeating_timer stpTimer[8]{};
@@ -78,14 +79,15 @@ template <uint slice> static bool stepperTimerCallback(repeating_timer *rt) {
   // Calculate the amount of the acceleration by using timer interrupt's period
   // as reference.
   int64_t accelAmountFp = (stpAccelFp[slice] * llabs(rt->delay_us)) / 1000000;
-  // If stepper is not moving reverse direction...
+  // If stepper is not moving in correct direction...
   if (remainingSteps * stpDir[slice] < 0) {
+    stpMotionTimeMs[slice] += static_cast<uint32_t>(llabs(rt->delay_us) / 1000);
     // If stepper is in valid speed range to stop, change the direction.
     if (Stepper::IsInBounds(speedFp, stpStoppingSpeedFp[slice] - accelAmountFp,
                             stpStartingSpeedFp[slice] + accelAmountFp)) {
       stepper->setDir(stpDir[slice] > 0 ? false : true);
       return stepper->startMotion(stpTargetPos[slice], stpAccelFp[slice] / 1000,
-                                  1000);
+                                  stpMotionTimeMs[slice]);
     } else {
       targetSpeedFp = stpStoppingSpeedFp[slice];
     }
@@ -144,7 +146,6 @@ static void stepperPwmCallback(void) {
         cancel_repeating_timer(&stpTimer[slice]);
         pwm_set_enabled(slice, false);
         continue;
-        ;
       }
     }
   }
@@ -175,8 +176,9 @@ Stepper::Stepper(const uint pulPin, const uint dirPin,
     alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
   }
 
-  setStartingSpeed(static_cast<int32_t>(25));
-  setStoppingSpeed(static_cast<int32_t>(25));
+  setStartingSpeed(static_cast<int32_t>(stepsPerRev / 10));
+  // TODO add stopping speed factor to calculateTargetSpeed() equation.
+  setStoppingSpeed(static_cast<int32_t>(0));
 }
 
 void Stepper::setTimerPeriod(const uint32_t periodMs) {
@@ -230,16 +232,17 @@ void Stepper::setSpeed(const float rad) { setSpeed(radsToSteps(rad)); }
 
 void Stepper::setSpeedFp(const int64_t stepFp) {
   // Calculate the wrap value of the pwm counter.
-  uint32_t wrap =
-      mClockHz / static_cast<uint32_t>(((stepFp > 0) ? stepFp : 1 / 1000));
+  const int32_t steps = static_cast<int32_t>(stepFp / 1000);
+  uint32_t wrap = mClockHz / static_cast<uint32_t>(((steps > 0) ? steps : 1));
 
   // If wrap number overflows 16 bits then increase the clock division amount to
   // achieve desired pwm frequency. If the wrap value is lower than 2^10, lower
   // the clock div to increase the precision of the counter wrap.
   while (wrap < (0x0001 << 10) || wrap > UINT16_MAX) {
-    if (wrap < (0x0001 << 10)) {
+    if (wrap <= (0x0001 << 10)) {
       if (mClockDiv <= 1.0f) {
-        wrap = (0x0001 << 10);
+        wrap = mClockHz / static_cast<uint32_t>(((steps > 0) ? steps : 1));
+        wrap = wrap > UINT16_MAX ? UINT16_MAX : wrap;
         break;
       } else {
         mClockDiv /= 2.0f;
@@ -256,11 +259,16 @@ void Stepper::setSpeedFp(const int64_t stepFp) {
     }
     mClockHz = static_cast<uint32_t>(mSysClockHz / mClockDiv);
     pwm_set_clkdiv(mSlice, mClockDiv);
-    wrap = mClockHz / static_cast<uint32_t>((stepFp / 1000));
+    wrap = mClockHz / static_cast<uint32_t>(steps);
   }
 
   mWrap = wrap;
   stpSpeedFp[mSlice] = stepFp;
+
+#ifdef DEBUG_LOG
+  printf("setSpeedFp => wrap %lu, speedFp %lld, clkDiv %.2f\n", wrap, stepFp,
+         mClockDiv);
+#endif
 
   // Set the dutycycle to 50% to create equal rectangle waves.
   pwm_set_wrap(mSlice, mWrap);
@@ -307,32 +315,26 @@ void Stepper::setDir(const bool dir) {
 int Stepper::getDir() { return stpDir[mSlice]; }
 
 void Stepper::enable(const bool en) {
-  if (stpPosSet[mSlice]) {
-    if (stpTargetPos[mSlice] == stpPos[mSlice]) {
-      pwm_set_enabled(mSlice, false);
-      cancel_repeating_timer(&stpTimer[mSlice]);
-      return;
-    } else {
-      if (!isMoving() && stpAccelSet[mSlice]) {
-        stpSpeedFp[mSlice] = stpStartingSpeedFp[mSlice];
-        if (get_core_num() == 1) {
-          alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs,
-                                            getTimerCallback(), this,
-                                            &stpTimer[mSlice]);
-        } else {
-          add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this,
-                                 &stpTimer[mSlice]);
-        }
-      }
-    }
-  }
-  if (!en) {
+  if (!en || (stpPosSet[mSlice] && (stpTargetPos[mSlice] == stpPos[mSlice]))) {
+    pwm_set_enabled(mSlice, false);
     cancel_repeating_timer(&stpTimer[mSlice]);
     stpIsMoving[mSlice] = false;
     stpPosSet[mSlice] = false;
     stpAccelSet[mSlice] = false;
+  } else {
+    pwm_set_enabled(mSlice, true);
+    if (!isMoving() && stpAccelSet[mSlice]) {
+      stpSpeedFp[mSlice] = stpStartingSpeedFp[mSlice];
+      if (get_core_num() == 1) {
+        alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs,
+                                          getTimerCallback(), this,
+                                          &stpTimer[mSlice]);
+      } else {
+        add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this,
+                               &stpTimer[mSlice]);
+      }
+    }
   }
-  pwm_set_enabled(mSlice, en);
 }
 
 bool Stepper::startMotion(const int32_t targetPosSteps,
@@ -346,15 +348,18 @@ bool Stepper::startMotion(const int32_t targetPosSteps,
 
   if (targetSpeed == 0) {
 #ifdef DEBUG_LOG
-    printf("StartMotion =>  Slice %u, Not Possible!!!\n", mSlice);
+    printf("StartMotion =>  Slice %u, DeltaSteps %ld, InitialSpeed %ld, Not "
+           "Possible!!!\n",
+           mSlice, deltaSteps, initialSpeed);
 #endif
     return false;
   }
 
-  if (!isMoving() && (targetPosSteps - stpPos[mSlice]) * stpDir[mSlice] < 0) {
+  if (!isMoving() && deltaSteps * stpDir[mSlice] < 0) {
     setDir(stpDir[mSlice] == 1 ? false : true);
   }
 
+  stpMotionTimeMs[mSlice] = timeMs;
   setTargetPos(targetPosSteps);
   setTargetSpeed(targetSpeed);
   setAccel(accelSteps);
@@ -434,17 +439,36 @@ int32_t Stepper::calculateTargetSpeed(const int32_t deltaSteps,
                                       const uint32_t timeMs) {
   const float deltaT = timeMs / 1000.0f;
   const float a = 1;
-  const float b = (2.0f * initialSpeed + deltaT * 2.0f * accel) / (-2.0f);
-  const float c =
-      (-(initialSpeed * initialSpeed) - 2 * accel * deltaSteps) / (-2.0f);
+  const float b = -(initialSpeed + deltaT * accel);
+  const float initialSpeedSqrd =
+      static_cast<float>(initialSpeed) * static_cast<float>(initialSpeed);
+  const float cRightSide =
+      static_cast<float>(accel) * static_cast<float>(-deltaSteps);
+  const float c = (initialSpeedSqrd / 2.0f + cRightSide);
 
-  const float disc = b * b - 4 * a * c;
+  const float disc = b * b - 4.0f * a * c;
+
+#ifdef DEBUG_LOG
+  printf("calculateTargetSpeed() => deltaT %.2f, a %.2f, b %.2f, Vi^2 %.2f, "
+         "CRight %.2f, c %.2f, disc "
+         "%.2f\n",
+         deltaT, a, b, initialSpeedSqrd, cRightSide, c, disc);
+#endif
   int32_t result = 0;
   if (disc > 0) {
-    float vf1 = (-b - sqrtf(disc)) / (2.0f * a);
+    const float discSqrt = sqrtf(disc);
+    float vf1 = (-b - discSqrt) / (2.0f * a);
     if (vf1 / accel > deltaT / 2.0f) {
-      vf1 = (-b + sqrtf(disc)) / (2.0f * a);
+      vf1 = (-b + discSqrt) / (2.0f * a);
+#ifdef DEBUG_LOG
+      printf("Alternate root vf1 = %.2f\n", vf1);
+#endif
     }
+#ifdef DEBUG_LOG
+    else {
+      printf("First root vf1 = %.2f\n", vf1);
+    }
+#endif
     if (vf1 < initialSpeed) {
       result = static_cast<int32_t>(
           (deltaSteps - initialSpeed * initialSpeed / (2.0f * accel)) /
@@ -453,6 +477,9 @@ int32_t Stepper::calculateTargetSpeed(const int32_t deltaSteps,
       result = static_cast<int32_t>(vf1);
     }
   }
+#ifdef DEBUG_LOG
+  printf("Result %ld\n", result);
+#endif
   return result;
 }
 

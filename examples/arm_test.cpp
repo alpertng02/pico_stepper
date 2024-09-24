@@ -19,15 +19,15 @@ class RoboticArm {
 public:
     RoboticArm(uint pul1 = 2, uint dir1 = 3, uint pul2 = 6, uint dir2 = 7, uint pul3 = 8, uint dir3 = 9) :
         stepper {
-            { pul1, dir1, stepsPerRev[0], timerPeriods[0] },
-            { pul2, dir2, stepsPerRev[1], timerPeriods[1] },
-            { pul3, dir3, stepsPerRev[2], timerPeriods[2] } }, armRads(getArmRads(initPx, initPy, initT1)) {
+            { pul1, dir1, stepsPerRev[0], timerPeriodsMs[0] },
+            { pul2, dir2, stepsPerRev[1], timerPeriodsMs[1] },
+            { pul3, dir3, stepsPerRev[2], timerPeriodsMs[2] } }, armRads(getArmRads(initPx, initPy, initT1)) {
         for(int i = 0; i < 3; i++) {
             stepper[i].setPos(armRads.theta[i]);
         }
     }
 
-    void move(const float px, const float py, const float theta, const float sec, const float gain = 5.0f) { 
+    void move(const float px, const float py, const float theta, const float sec, const float gain = 1.0f) { 
         const auto rads = getArmRads(px, py, theta);
         for (int i = 0; i < 3; i++) {
             stepper[i].startMotion(rads.theta[i], (rads.theta[i] - stepper[i].getPosRads()) * gain / sec, sec);
@@ -47,24 +47,22 @@ private:
     };
 
     Stepper stepper[3] {
-        { 2, 3, 400, 10000 },
-        { 6, 7, 400, 10000 },
-        { 8, 9, 2000, 10000 }
+        { 2, 3, 400, timerPeriodsMs[0] },
+        { 6, 7, 400, timerPeriodsMs[1] },
+        { 8, 9, 2000, timerPeriodsMs[2] }
     };
     RoboticArm::Rads armRads {};
 
     static constexpr float gearRatio[3] { 50.0f, 68.181818f, 2.f };
     static constexpr uint32_t stepsPerRev[3] { 400, 400, 2000 };
-    static constexpr uint32_t timerPeriods[3] { 10000, 10000, 10000 };
+    static constexpr uint32_t timerPeriodsMs[3] { 3, 3, 3 };
     static constexpr float initPx { 500.0f };
-    static constexpr float initPy { -300.0f };
+    static constexpr float initPy { -580.0f };
     static constexpr float initT1 { 0 };
 
-
-
     RoboticArm::Rads getArmRads(const float px, const float py, const float theta) {
-        constexpr int a1 = 500;
-        constexpr int a2 = 300;
+        constexpr int a1 = 580;
+        constexpr int a2 = 500;
 
         const float cost3 = (
             px * px
@@ -99,11 +97,10 @@ private:
 };
 
 int main() {
-
     stdio_init_all();
     sleep_ms(1000);
 
-    RoboticArm arm {};
+    RoboticArm arm{};
 
     printf("Enter Initial Position =>  px py theta:\n");
     float px = 500.0f, py = -300.0f, theta = 0.0f;
