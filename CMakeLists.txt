@@ -16,6 +16,6 @@ add_compile_options(-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-vari
 pico_sdk_init()
 
 # Add subdirectories for libraries and examples
-add_subdirectory(lib/Stepper)
+add_subdirectory(lib)
 add_subdirectory(examples)
 

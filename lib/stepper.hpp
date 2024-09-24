@@ -12,7 +12,6 @@
 #ifndef __STEPPER_HPP__
 #define __STEPPER_HPP__
 
-#include "hardware/gpio.h"
 #include "pico/time.h"
 
 /**
