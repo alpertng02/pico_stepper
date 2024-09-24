@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 #include "stepper.hpp"
-#include <bitset>
 
 void core1Main() {
   printf("Entered core1\n");

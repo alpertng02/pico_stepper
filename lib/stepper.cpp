@@ -18,7 +18,7 @@
 #include "pico/time.h"
 #include <cmath>
 
-#define DEBUG_LOG
+// #define DEBUG_LOG
 
 #ifdef DEBUG_LOG
 #include <cstdio>
@@ -129,7 +129,7 @@ static void stepperPwmCallback(void) {
   for (int i = 0; i < stpCount[coreNum]; i++) {
     const uint slice = stpSlice[coreNum][i];
     if (irq & (1 << slice)) {
-      printf("stepperPwmCallback slice %u on core%u\n", slice, get_core_num());
+      // printf("stepperPwmCallback slice %u on core%u\n", slice, get_core_num());
       // Clear the interrupt flag so the interrupt does not trigger again.
       pwm_clear_irq(slice);
       // Update the position.
