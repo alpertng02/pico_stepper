@@ -35,7 +35,24 @@ pico_add_extra_outputs(arm_test)
 pico_enable_stdio_usb(arm_test 1)
 pico_enable_stdio_uart(arm_test 0)
 
+#--------------------------------------------------------------
 
+# Add the executable for the stepper example
+add_executable(multicore_example multicore_example.cpp)
+
+# Link the necessary libraries to the stepper example
+target_link_libraries(multicore_example 
+    pico_stdlib
+    pico_multicore
+    pico-stepper
+)
+
+# Add extra outputs for the stepper example
+pico_add_extra_outputs(multicore_example)
+
+# Enable USB output, disable UART output
+pico_enable_stdio_usb(multicore_example 1)
+pico_enable_stdio_uart(multicore_example 0)
 
 
 

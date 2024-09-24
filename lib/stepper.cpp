@@ -18,7 +18,7 @@
 #include "pico/time.h"
 #include <cmath>
 
-// #define DEBUG_LOG
+#define DEBUG_LOG
 
 #ifdef DEBUG_LOG
 #include <cstdio>
@@ -28,9 +28,9 @@
 static alarm_pool *alarmPoolForCore1 = nullptr;
 
 // How many steppers are created.
-static volatile int stpCount = 0;
+static volatile int stpCount[2]{};
 // Buffer to hold created slices.
-static volatile uint stpSlice[8]{};
+static volatile uint stpSlice[2][8]{};
 
 // All indexes in arrays below represent the slice number of the corresponding
 // stepper. Unfortunately, PWM interrupt can only be used with global variables
@@ -124,12 +124,12 @@ template <uint slice> static bool stepperTimerCallback(repeating_timer *rt) {
  *
  */
 static void stepperPwmCallback(void) {
-  uint32_t irq = pwm_get_irq_status_mask();
-
-  for (int i = 0; i < stpCount; i++) {
-    const uint slice = stpSlice[i];
-
+  const uint32_t irq = pwm_get_irq_status_mask();
+  const uint coreNum = get_core_num();
+  for (int i = 0; i < stpCount[coreNum]; i++) {
+    const uint slice = stpSlice[coreNum][i];
     if (irq & (1 << slice)) {
+      printf("stepperPwmCallback slice %u on core%u\n", slice, get_core_num());
       // Clear the interrupt flag so the interrupt does not trigger again.
       pwm_clear_irq(slice);
       // Update the position.
@@ -155,12 +155,13 @@ Stepper::Stepper(const uint pulPin, const uint dirPin,
     : mPul(pulPin), mDir(dirPin), mSlice(pwm_gpio_to_slice_num(pulPin)),
       mStepsPerRev(stepsPerRev), mPeriodMs(periodMs) {
   // Set the global variables to default values.
-  stpSlice[stpCount] = mSlice;
+  auto coreNum = get_core_num();
+  stpSlice[coreNum][stpCount[coreNum]] = mSlice;
   stpPos[mSlice] = 0;
   stpPosSet[mSlice] = false;
   stpAccelSet[mSlice] = false;
   stpDir[mSlice] = true;
-  stpCount++;
+  stpCount[coreNum]++;
 
   // Initialize the direction pin.
   gpio_init(dirPin);
@@ -171,7 +172,7 @@ Stepper::Stepper(const uint pulPin, const uint dirPin,
 
   // If the class is created from core 1, create alarm pool for core 1 timer
   // interrupts.
-  if (get_core_num() == 1 && alarmPoolForCore1 == nullptr) {
+  if (coreNum && alarmPoolForCore1 == nullptr) {
     alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
   }
 
@@ -383,7 +384,6 @@ bool Stepper::startMotion(const float targetPosRads, const float accelRads,
 bool Stepper::isMoving() { return stpIsMoving[mSlice]; }
 
 Stepper::~Stepper() {
-  stpCount--;
   pwm_set_irq_enabled(mSlice, false);
   pwm_set_enabled(mSlice, false);
   cancel_repeating_timer(&stpTimer[mSlice]);
@@ -432,10 +432,9 @@ float Stepper::stepsToRads(const int32_t steps) {
   return static_cast<float>((steps * 2.0f * mPi) / mStepsPerRev);
 }
 
-int32_t Stepper::calculateTargetSpeed(const int32_t deltaSteps,
-                                      const int32_t initialSpeed,
-                                      const int32_t accel,
-                                      const uint32_t timeMs) {
+int32_t Stepper::calculateTargetSpeed(int32_t deltaSteps, int32_t initialSpeed,
+                                      int32_t accel, uint32_t timeMs) {
+  deltaSteps = labs(deltaSteps);
   const float deltaT = timeMs / 1000.0f;
   const float a = 1;
   const float b = -(initialSpeed + deltaT * accel);
