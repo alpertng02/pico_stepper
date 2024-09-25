@@ -190,6 +190,13 @@ public:
   void setStoppingSpeed(const float rads);
 
   /**
+   * @brief Set the steps in a single revolution of stepper motor.
+   * 
+   * @param steps 
+   */
+  void setStepsPerRev(const uint32_t steps);
+  
+  /**
    * @brief Gets the actual speed of the stepper motor.
    *
    * This function returns the current speed of the stepper motor in steps per
@@ -387,7 +394,7 @@ private:
   const uint mSlice;
 
   // Number of steps per revolution
-  const uint mStepsPerRev = 400;
+  uint mStepsPerRev = 400;
   // Control period in milliseconds
   uint32_t mPeriodMs = 5;
 
