@@ -179,9 +179,7 @@ Stepper::Stepper(
     setStoppingSpeed(static_cast<int32_t>(0));
 }
 
-void Stepper::setStepsPerRev(const uint32_t steps) {
-    mStepsPerRev = steps;
-}
+void Stepper::setStepsPerRev(const uint32_t steps) { mStepsPerRev = steps; }
 
 
 void Stepper::setTimerPeriod(const uint32_t periodMs) {
@@ -281,7 +279,13 @@ void Stepper::setStoppingSpeed(const int32_t steps) { stpStoppingSpeedFp[mSlice]
 
 void Stepper::setStoppingSpeed(const float rads) { setStoppingSpeed(radsToSteps(rads)); }
 
-int32_t Stepper::getActualSpeed() { return mClockHz / mWrap; }
+int32_t Stepper::getActualSpeed() {
+    if (isMoving()) {
+        return mClockHz / mWrap;
+    } else {
+        return 0;
+    }
+}
 
 float Stepper::getActualSpeedRads() { return stepsToRads(getActualSpeed()); }
 
@@ -388,6 +392,7 @@ void Stepper::initPwm() {
     pwm_set_enabled(mSlice, false);
 
     irq_set_exclusive_handler(PWM_IRQ_WRAP, stepperPwmCallback);
+    irq_set_priority(PWM_IRQ_WRAP, PICO_HIGHEST_IRQ_PRIORITY);
     irq_set_enabled(PWM_IRQ_WRAP, true);
 
     enable(false);
