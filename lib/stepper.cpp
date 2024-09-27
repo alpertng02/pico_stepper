@@ -21,8 +21,8 @@
 
 // #define DEBUG_LOG
 
-#include <cstdio>
 #ifdef DEBUG_LOG
+#include <cstdio>
 #endif
 
 // Steppers created on core 1 will use this alarm pool for interrupts.
@@ -111,8 +111,8 @@ template <uint slice> static bool stepperTimerCallback(repeating_timer *rt) {
   }
 #ifdef DEBUG_LOG
   printf(
-      "Slice %u, Pos %ld, Speed %lld, Target Speed %lld, Accel Amount %lld\n",
-      slice, stpPos[slice], speedFp, targetSpeedFp, accelAmountFp);
+      "Slice %u, Pos %ld, Speed %lld, Target Speed %lld, Accel Amount %lld, Core %u\n",
+      slice, stpPos[slice], speedFp, targetSpeedFp, accelAmountFp, get_core_num());
 #endif
   return true;
 }
@@ -135,7 +135,7 @@ static void stepperPwmCallback(void) {
       stpPos[slice] += stpDir[slice];
       stpIsMoving[slice] = true;
       const uint coreNum = get_core_num();
-      printf("stepperPwmCallback slice %u, pos %ld on core%u\n", slice, stpPos[slice], coreNum);
+      // printf("stepperPwmCallback slice %u, pos %ld on core%u\n", slice, stpPos[slice], coreNum);
       // If position has been reached, update the variables needed and disable
       // pwm for the slice.
       if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice]) {
