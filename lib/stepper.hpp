@@ -412,6 +412,9 @@ private:
   // Clock divider for PWM
   float mClockDiv = 1.0f;
 
+  repeating_timer_t mTimer{};
+  uint mTimerCoreNum{};
+  
   // Value of Pi
   static constexpr float mPi = 3.1415926f;
 

@@ -56,8 +56,14 @@ static volatile int64_t stpStoppingSpeedFp[8]{};
 static volatile uint32_t stpMotionTimeMs[8]{};
 static volatile bool stpAccelSet[8]{};
 static volatile bool stpIsMoving[8]{};
-static repeating_timer stpTimer[8]{};
-static uint stpTimerCoreNums[8]{};
+
+inline static void turnOffStepper(uint slice) {
+  pwm_set_enabled(slice, false);
+  stpSpeedFp[slice] = stpStartingSpeedFp[slice];
+  stpPosSet[slice] = false;
+  stpAccelSet[slice] = false;
+  stpIsMoving[slice] = false;
+}
 
 /**
  * @brief Repeating timer callback for controlling the velocity of the stepper.
@@ -141,17 +147,10 @@ static void stepperPwmCallback(void) {
       // Update the position.
       stpPos[slice] += stpDir[slice];
       stpIsMoving[slice] = true;
-      // const uint coreNum = get_core_num();
-      // printf("stepperPwmCallback slice %u, pos %ld on core%u\n", slice,
-      // stpPos[slice], coreNum); If position has been reached, update the
-      // variables needed and disable pwm for the slice.
+      // If position has been reached, update the variables needed and disable
+      // pwm for the slice.
       if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice]) {
-        pwm_set_enabled(slice, false);
-        stpSpeedFp[slice] = stpStartingSpeedFp[slice];
-        stpPosSet[slice] = false;
-        stpAccelSet[slice] = false;
-        stpIsMoving[slice] = false;
-        continue;
+        turnOffStepper(slice);
       }
     }
   }
@@ -182,7 +181,7 @@ Stepper::Stepper(const uint pulPin, const uint dirPin,
   if (coreNum == 1 && alarmPoolForCore1 == nullptr) {
     alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
   }
-  stpTimerCoreNums[mSlice] = coreNum;
+  mTimerCoreNum = coreNum;
 
   setStartingSpeed(static_cast<int32_t>(stepsPerRev / 10));
   // TODO add stopping speed factor to calculateTargetSpeed() equation.
@@ -193,7 +192,7 @@ void Stepper::setStepsPerRev(const uint32_t steps) { mStepsPerRev = steps; }
 
 void Stepper::setTimerPeriod(const uint32_t periodMs) {
   mPeriodMs = periodMs;
-  stpTimer[mSlice].delay_us = -mPeriodMs * 1000;
+  mTimer.delay_us = -mPeriodMs * 1000;
 }
 
 void Stepper::setAccel(const int32_t accelSteps) {
@@ -332,10 +331,7 @@ int Stepper::getDir() { return stpDir[mSlice]; }
 
 void Stepper::enable(const bool en) {
   if (!en || (stpPosSet[mSlice] && (stpTargetPos[mSlice] == stpPos[mSlice]))) {
-    pwm_set_enabled(mSlice, false);
-    stpIsMoving[mSlice] = false;
-    stpPosSet[mSlice] = false;
-    stpAccelSet[mSlice] = false;
+    turnOffStepper(mSlice);
   } else {
     pwm_set_enabled(mSlice, true);
     if (!isMoving() && stpAccelSet[mSlice]) {
@@ -346,8 +342,8 @@ void Stepper::enable(const bool en) {
       printf("enable() => Slice %u, Timer Interrupt Enabled on Core %u\n",
              mSlice, coreNum);
 #endif
-      if (coreNum != stpTimerCoreNums[mSlice]) {
-        cancel_repeating_timer(&stpTimer[mSlice]);
+      if (coreNum != mTimerCoreNum) {
+        cancel_repeating_timer(&mTimer);
       }
       if (coreNum == 1) {
         if (alarmPoolForCore1 == nullptr) {
@@ -355,12 +351,12 @@ void Stepper::enable(const bool en) {
         }
         alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs,
                                           getTimerCallback(), this,
-                                          &stpTimer[mSlice]);
+                                          &mTimer);
       } else {
         add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this,
-                               &stpTimer[mSlice]);
+                               &mTimer);
       }
-      stpTimerCoreNums[mSlice] = coreNum;
+      mTimerCoreNum = coreNum;
     }
 #ifdef STEPPER_DEBUG_LOG
     else {
@@ -423,8 +419,7 @@ bool Stepper::isMoving() { return stpIsMoving[mSlice]; }
 
 Stepper::~Stepper() {
   pwm_set_irq_enabled(mSlice, false);
-  pwm_set_enabled(mSlice, false);
-  cancel_repeating_timer(&stpTimer[mSlice]);
+  turnOffStepper(mSlice);
   gpio_deinit(mPul);
   gpio_deinit(mDir);
 }
