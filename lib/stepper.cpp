@@ -19,8 +19,6 @@
 #include <array>
 #include <cmath>
 
-// #define STEPPER_DEBUG_LOG
-
 #ifdef STEPPER_DEBUG_LOG
 #include <cstdio>
 #endif
@@ -401,9 +399,9 @@ bool Stepper::startMotion(const int32_t targetPosSteps,
       targetSpeed, -abs(accelSteps),
       static_cast<uint32_t>((targetSpeed * 1000) / accelSteps))));
 #ifdef STEPPER_DEBUG_LOG
-  printf("StartMotion() =>  Slice %u, TargetPos %ld, targetSpeed %ld, "
+  printf("StartMotion() =>  Slice %u, TargetPos %ld, DeltaSteps %ld, Accel %ld, targetSpeed %ld, "
          "deaccelSteps %ld\n",
-         mSlice, targetPosSteps, targetSpeed, stpDeaccelSteps[mSlice]);
+         mSlice, targetPosSteps, deltaSteps, accelSteps, targetSpeed, stpDeaccelSteps[mSlice]);
 #endif
   enable(start);
   return true;

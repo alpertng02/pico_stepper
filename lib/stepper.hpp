@@ -12,8 +12,8 @@
 #ifndef __STEPPER_HPP__
 #define __STEPPER_HPP__
 
-#define STEPPER_DEBUG_LOG
 #ifdef STEPPER_DEBUG_LOG_ENABLED
+#define STEPPER_DEBUG_LOG
 #endif
 
 
