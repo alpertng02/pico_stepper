@@ -19,9 +19,9 @@
 #include <array>
 #include <cmath>
 
-// #define DEBUG_LOG
+// #define STEPPER_DEBUG_LOG
 
-#ifdef DEBUG_LOG
+#ifdef STEPPER_DEBUG_LOG
 #include <cstdio>
 #endif
 
@@ -57,6 +57,7 @@ static volatile uint32_t stpMotionTimeMs[8]{};
 static volatile bool stpAccelSet[8]{};
 static volatile bool stpIsMoving[8]{};
 static repeating_timer stpTimer[8]{};
+static uint stpTimerCoreNums[8]{};
 
 /**
  * @brief Repeating timer callback for controlling the velocity of the stepper.
@@ -72,6 +73,10 @@ static repeating_timer stpTimer[8]{};
 template <uint slice> static bool stepperTimerCallback(repeating_timer *rt) {
   // Get the class instance that created the timer callback.
   Stepper *stepper = static_cast<Stepper *>(rt->user_data);
+
+  if (!stepper->isMoving()) {
+    return false;
+  }
 
   const int64_t speedFp = stpSpeedFp[slice];
   const int32_t remainingSteps = stpTargetPos[slice] - stpPos[slice];
@@ -109,10 +114,12 @@ template <uint slice> static bool stepperTimerCallback(repeating_timer *rt) {
   if (changedSpeedFp != speedFp) {
     stepper->setSpeedFp(changedSpeedFp);
   }
-#ifdef DEBUG_LOG
-  printf(
-      "Slice %u, Pos %ld, Speed %lld, Target Speed %lld, Accel Amount %lld, Core %u\n",
-      slice, stpPos[slice], speedFp, targetSpeedFp, accelAmountFp, get_core_num());
+#ifdef STEPPER_DEBUG_LOG
+  printf("stepperTimerCallback<%u>() => Pos %ld, Speed %lld, Target Speed "
+         "%lld, Accel Amount %lld, "
+         "Core %u\n",
+         slice, stpPos[slice], speedFp, targetSpeedFp, accelAmountFp,
+         get_core_num());
 #endif
   return true;
 }
@@ -134,13 +141,12 @@ static void stepperPwmCallback(void) {
       // Update the position.
       stpPos[slice] += stpDir[slice];
       stpIsMoving[slice] = true;
-      const uint coreNum = get_core_num();
-      // printf("stepperPwmCallback slice %u, pos %ld on core%u\n", slice, stpPos[slice], coreNum);
-      // If position has been reached, update the variables needed and disable
-      // pwm for the slice.
+      // const uint coreNum = get_core_num();
+      // printf("stepperPwmCallback slice %u, pos %ld on core%u\n", slice,
+      // stpPos[slice], coreNum); If position has been reached, update the
+      // variables needed and disable pwm for the slice.
       if (stpPosSet[slice] && stpPos[slice] == stpTargetPos[slice]) {
         pwm_set_enabled(slice, false);
-        cancel_repeating_timer(&stpTimer[slice]);
         stpSpeedFp[slice] = stpStartingSpeedFp[slice];
         stpPosSet[slice] = false;
         stpAccelSet[slice] = false;
@@ -173,9 +179,10 @@ Stepper::Stepper(const uint pulPin, const uint dirPin,
   // If the class is created from core 1, create alarm pool for core 1 timer
   // interrupts.
   const auto coreNum = get_core_num();
-  if (coreNum && alarmPoolForCore1 == nullptr) {
+  if (coreNum == 1 && alarmPoolForCore1 == nullptr) {
     alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
   }
+  stpTimerCoreNums[mSlice] = coreNum;
 
   setStartingSpeed(static_cast<int32_t>(stepsPerRev / 10));
   // TODO add stopping speed factor to calculateTargetSpeed() equation.
@@ -268,8 +275,8 @@ void Stepper::setSpeedFp(const int64_t stepFp) {
   mWrap = wrap;
   stpSpeedFp[mSlice] = stepFp;
 
-#ifdef DEBUG_LOG
-  printf("setSpeedFp => wrap %lu, speedFp %lld, clkDiv %.2f\n", wrap, stepFp,
+#ifdef STEPPER_DEBUG_LOG
+  printf("setSpeedFp() => wrap %lu, speedFp %lld, clkDiv %.2f\n", wrap, stepFp,
          mClockDiv);
 #endif
 
@@ -326,7 +333,6 @@ int Stepper::getDir() { return stpDir[mSlice]; }
 void Stepper::enable(const bool en) {
   if (!en || (stpPosSet[mSlice] && (stpTargetPos[mSlice] == stpPos[mSlice]))) {
     pwm_set_enabled(mSlice, false);
-    cancel_repeating_timer(&stpTimer[mSlice]);
     stpIsMoving[mSlice] = false;
     stpPosSet[mSlice] = false;
     stpAccelSet[mSlice] = false;
@@ -334,7 +340,19 @@ void Stepper::enable(const bool en) {
     pwm_set_enabled(mSlice, true);
     if (!isMoving() && stpAccelSet[mSlice]) {
       stpSpeedFp[mSlice] = stpStartingSpeedFp[mSlice];
-      if (get_core_num() == 1) {
+      stpIsMoving[mSlice] = true;
+      const auto coreNum = get_core_num();
+#ifdef STEPPER_DEBUG_LOG
+      printf("enable() => Slice %u, Timer Interrupt Enabled on Core %u\n",
+             mSlice, coreNum);
+#endif
+      if (coreNum != stpTimerCoreNums[mSlice]) {
+        cancel_repeating_timer(&stpTimer[mSlice]);
+      }
+      if (coreNum == 1) {
+        if (alarmPoolForCore1 == nullptr) {
+          alarmPoolForCore1 = alarm_pool_create_with_unused_hardware_alarm(8);
+        }
         alarm_pool_add_repeating_timer_ms(alarmPoolForCore1, -mPeriodMs,
                                           getTimerCallback(), this,
                                           &stpTimer[mSlice]);
@@ -342,7 +360,14 @@ void Stepper::enable(const bool en) {
         add_repeating_timer_ms(-mPeriodMs, getTimerCallback(), this,
                                &stpTimer[mSlice]);
       }
+      stpTimerCoreNums[mSlice] = coreNum;
     }
+#ifdef STEPPER_DEBUG_LOG
+    else {
+
+      printf("enable() => Slice %u, Enabled without timer interrupt\n", mSlice);
+    }
+#endif
   }
 }
 
@@ -360,8 +385,8 @@ bool Stepper::startMotion(const int32_t targetPosSteps,
       abs(calculateTargetSpeed(deltaSteps, initialSpeed, accelSteps, timeMs));
 
   if (targetSpeed == 0) {
-#ifdef DEBUG_LOG
-    printf("StartMotion =>  Slice %u, DeltaSteps %ld, InitialSpeed %ld, Not "
+#ifdef STEPPER_DEBUG_LOG
+    printf("StartMotion() =>  Slice %u, DeltaSteps %ld, InitialSpeed %ld, Not "
            "Possible!!!\n",
            mSlice, deltaSteps, initialSpeed);
 #endif
@@ -379,8 +404,8 @@ bool Stepper::startMotion(const int32_t targetPosSteps,
   setDeaccelSteps(abs(getStepIncrease(
       targetSpeed, -abs(accelSteps),
       static_cast<uint32_t>((targetSpeed * 1000) / accelSteps))));
-#ifdef DEBUG_LOG
-  printf("StartMotion =>  Slice %u, TargetPos %ld, targetSpeed %ld, "
+#ifdef STEPPER_DEBUG_LOG
+  printf("StartMotion() =>  Slice %u, TargetPos %ld, targetSpeed %ld, "
          "deaccelSteps %ld\n",
          mSlice, targetPosSteps, targetSpeed, stpDeaccelSteps[mSlice]);
 #endif
@@ -434,8 +459,9 @@ void Stepper::initPwm() {
 
   enable(false);
 
-#ifdef DEBUG_LOG
-  printf("Pwm %u => SysClockSpeed: %lu, PwmClockSpeed: %lu, ClockDiv: %.2f\n",
+#ifdef STEPPER_DEBUG_LOG
+  printf("initPwm() => Pwm %u => SysClockSpeed: %lu, PwmClockSpeed: %lu, "
+         "ClockDiv: %.2f\n",
          mPul, mSysClockHz, mClockHz, mClockDiv);
 #endif
 }
@@ -462,11 +488,10 @@ int32_t Stepper::calculateTargetSpeed(int32_t deltaSteps, int32_t initialSpeed,
 
   const float disc = b * b - 4.0f * a * c;
 
-#ifdef DEBUG_LOG
-  printf("calculateTargetSpeed() => deltaT %.2f, a %.2f, b %.2f, Vi^2 %.2f, "
-         "CRight %.2f, c %.2f, disc "
+#ifdef STEPPER_DEBUG_LOG
+  printf("calculateTargetSpeed() => deltaT %.2f, a %.2f, b %.2f, c %.2f, disc "
          "%.2f\n",
-         deltaT, a, b, initialSpeedSqrd, cRightSide, c, disc);
+         deltaT, a, b, c, disc);
 #endif
   int32_t result = 0;
   if (disc > 0) {
@@ -474,13 +499,13 @@ int32_t Stepper::calculateTargetSpeed(int32_t deltaSteps, int32_t initialSpeed,
     float vf1 = (-b - discSqrt) / (2.0f * a);
     if (vf1 / accel > deltaT / 2.0f) {
       vf1 = (-b + discSqrt) / (2.0f * a);
-#ifdef DEBUG_LOG
-      printf("Alternate root vf1 = %.2f\n", vf1);
+#ifdef STEPPER_DEBUG_LOG
+      printf("calculateTargetSpeed() => Alternate root vf1 = %.2f\n", vf1);
 #endif
     }
-#ifdef DEBUG_LOG
+#ifdef STEPPER_DEBUG_LOG
     else {
-      printf("First root vf1 = %.2f\n", vf1);
+      printf("calculateTargetSpeed() => First root vf1 = %.2f\n", vf1);
     }
 #endif
     if (vf1 < initialSpeed) {
@@ -491,8 +516,8 @@ int32_t Stepper::calculateTargetSpeed(int32_t deltaSteps, int32_t initialSpeed,
       result = static_cast<int32_t>(vf1);
     }
   }
-#ifdef DEBUG_LOG
-  printf("Result %ld\n", result);
+#ifdef STEPPER_DEBUG_LOG
+  printf("calculateTargetSpeed() => Result %ld\n", result);
 #endif
   return result;
 }
