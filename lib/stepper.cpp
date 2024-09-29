@@ -266,7 +266,7 @@ void Stepper::setSpeedFp(const int64_t stepFp) {
     }
     mClockHz = static_cast<uint32_t>(mSysClockHz / mClockDiv);
     pwm_set_clkdiv(mSlice, mClockDiv);
-    wrap = mClockHz / static_cast<uint32_t>(steps);
+    wrap = static_cast<uint32_t>(mClockHz / static_cast<float>(steps));
   }
 
   mWrap = wrap;
@@ -312,7 +312,7 @@ void Stepper::setStoppingSpeed(const float rads) {
 
 int32_t Stepper::getActualSpeed() {
   if (isMoving()) {
-    return mClockHz / mWrap;
+    return static_cast<int32_t>(mClockHz / static_cast<float>(mWrap));
   } else {
     return 0;
   }
