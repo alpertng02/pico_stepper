@@ -52,49 +52,11 @@ public:
    * @param dirPin The GPIO pin number for the DIR pin.
    * @param stepsPerRev The number of steps per revolution for the stepper
    * motor.
-   * @param periodMs The period in milliseconds for the stepper motor movement.
    */
   Stepper(const uint pulPin, const uint dirPin,
-          const uint32_t stepsPerRev = 400, const uint32_t periodMs = 5);
+          const uint32_t stepsPerRev = 400);
 
-  /**
-   * Sets the acceleration steps for the stepper motor.
-   *
-   *   This function sets the acceleration factor for the stepper motor. The
-   * acceleration factor determines how quickly the stepper motor reaches its
-   * maximum speed. A higher acceleration factor will result in a faster
-   * acceleration, while a lower acceleration factor will result in a slower
-   * acceleration.
-   *
-   * @param accelSteps The number of acceleration steps to set.
-   */
-  void setAccel(const int32_t accelSteps);
-
-  /**
-   * Sets the acceleration of the stepper motor.
-   *
-   * @param accelRads The acceleration value in radians per second squared.
-   */
-  void setAccel(const float accelRads);
-
-  /**
-   * @brief Sets the acceleration factor for the stepper motor.
-   *
-   * @param accelFp The acceleration factor to set, specified as a fixed-point
-   * number.
-   */
-  void setAccelFp(const int64_t accelFp);
-
-  /**
-   * @brief Sets the number of steps for deceleration.
-   *
-   * This function sets the number of steps that the stepper motor will take to
-   * decelerate to a stop.
-   *
-   * @param deaccelSteps The number of steps for deceleration.
-   */
-  void setDeaccelSteps(const int32_t deaccelSteps);
-
+ 
   /**
    * @brief Sets the speed of the stepper motor.
    *
@@ -113,86 +75,6 @@ public:
    * @param rad The desired speed of the stepper motor in radians per second.
    */
   void setSpeed(const float rad);
-
-  /**
-   * Sets the speed of the stepper motor in fixed-point format.
-   *
-   * This function calculates the appropriate clock frequency and clock divider
-   * based on the desired step frequency in fixed-point format. It adjusts the
-   * clock divider and clock frequency to ensure that the step frequency falls
-   * within the acceptable range.
-   *
-   * @param stepFp The desired step frequency in fixed-point format.
-   */
-  void setSpeedFp(const int64_t stepFp);
-
-  /**
-   * @brief Sets the target speed for the stepper motor.
-   *
-   * This function sets the target speed for the stepper motor. The target speed
-   * is the desired speed at which the motor should rotate.
-   *
-   * @param targetSpeed The target speed to set for the stepper motor.
-   */
-  void setTargetSpeed(const int32_t steps);
-
-  /**
-   * @brief Sets the target speed for the stepper motor.
-   *
-   * This function sets the target speed for the stepper motor. The target speed
-   * is the desired speed at which the motor should rotate.
-   *
-   * @param targetSpeed The target speed to set for the stepper motor.
-   */
-  void setTargetSpeed(const float rads);
-
-  /**
-   * @brief Sets the starting speed for the stepper motor.
-   *
-   * This function sets the starting speed for the stepper motor. The starting
-   * speed is the speed at which the motor should start rotating. It is more
-   * efficient to start the stepper at a slow speed directly instead of
-   * accelerating from 0.
-   *
-   * @param steps The starting speed in steps per second.
-   */
-  void setStartingSpeed(const int32_t steps);
-
-  /**
-   * @brief Sets the starting speed for the stepper motor.
-   *
-   * This function sets the starting speed for the stepper motor. The starting
-   * speed is the speed at which the motor should start rotating. It is more
-   * efficient to start the stepper at a slow speed directly instead of
-   * accelerating from 0.
-   *
-   * @param rads The starting speed in radians per second.
-   */
-  void setStartingSpeed(const float rads);
-
-  /**
-   * @brief Sets the stopping speed for the stepper motor.
-   *
-   * This function sets the stopping speed for the stepper motor. The stopping
-   * speed is the speed at which the motor should stop rotating. Stopping the
-   * stepper at low speeds instantly instead of deaccelerating slowly can
-   * increase efficiency without creating noticable jerk.
-   *
-   * @param steps The stopping speed in steps per second.
-   */
-  void setStoppingSpeed(const int32_t steps);
-
-  /**
-   * @brief Sets the stopping speed for the stepper motor.
-   *
-   * This function sets the stopping speed for the stepper motor. The stopping
-   * speed is the speed at which the motor should stop rotating. Stopping the
-   * stepper at low speeds instantly instead of deaccelerating slowly can
-   * increase efficiency without creating noticable jerk.
-   *
-   * @param rads The stopping speed in radians per second.
-   */
-  void setStoppingSpeed(const float rads);
 
   /**
    * @brief Set the steps in a single revolution of stepper motor.
@@ -299,50 +181,6 @@ public:
   float getPosRads();
 
   /**
-   * @brief Sets the timer period for the stepper motor speed control.
-   *
-   * This function sets the timer period in microseconds for the stepper motor
-   * speed control. A smaller period means a smoother control but requires more
-   * CPU time.
-   *
-   * @param periodMs The desired timer period in microseconds.
-   */
-  void setTimerPeriod(const uint32_t periodMs);
-
-  /**
-   * Calculates and sets the trajectory of the linear speed controlled stepper
-   * motor in steps units.
-   *
-   * @param targetPosSteps The target position in steps.
-   * @param accelSteps The acceleration in steps/sec2.
-   * @param timeMs The time in milliseconds.
-   * @param start Flag indicating whether to start the motion immediately
-   * (default: true).
-   *
-   * @return true if the motion trajectory was possible in given motion
-   * duration, false otherwise.
-   */
-  bool startMotion(const int32_t targetPosSteps, const int32_t accelSteps,
-                   const uint32_t timeMs, const bool start = true);
-
-  /**
-   * Calculates and sets the trajectory of the linear speed controlled stepper
-   * motor in radian units.
-   *
-   * @param targetPosRads The target position of the stepper motor in radians.
-   * @param accelRads The acceleration of the stepper motor in radians per
-   * second squared.
-   * @param timeSec The total time for the motion in seconds.
-   * @param start If true, the motion starts immediately. If false, the motion
-   * is queued and will start when the previous motion completes.
-   *
-   * @return true if the motion trajectory was possible in given motion
-   * duration, false otherwise.
-   */
-  bool startMotion(const float targetPosRads, const float accelRads,
-                   const float timeSec, const bool start = true);
-
-  /**
    * @brief Checks if the stepper motor is currently moving.
    *
    * @return true if the stepper motor is moving, false otherwise.
@@ -400,8 +238,6 @@ private:
 
   // Number of steps per revolution
   uint mStepsPerRev = 400;
-  // Control period in milliseconds
-  uint32_t mPeriodMs = 5;
 
   // Clock frequency in Hz
   uint32_t mClockHz = 125 * 1000 * 1000;
@@ -411,9 +247,6 @@ private:
   uint16_t mWrap = UINT16_MAX;
   // Clock divider for PWM
   float mClockDiv = 1.0f;
-
-  repeating_timer_t mTimer{};
-  uint mTimerCoreNum{};
   
   // Value of Pi
   static constexpr float mPi = 3.1415926f;
@@ -447,61 +280,5 @@ private:
    */
   float stepsToRads(const int32_t steps);
 
-  /**
-   * @brief Sets the target speed for the stepper motor.
-   *
-   * This function sets the target speed for the stepper motor. The speed is
-   * specified as a fixed-point value represented by the `targetSpeedFp`
-   * parameter.
-   *
-   * @param targetSpeedFp The target speed in fixed-point format.
-   */
-  void setTargetSpeedFp(const int64_t targetSpeedFp);
-
-  /**
-   * @brief Retrieves the repeating timer callback function.
-   *
-   * This function returns the repeating timer callback function associated with
-   * the stepper object. The repeating timer callback function is responsible
-   * for controlling the stepper motor movement.
-   *
-   * @return The repeating timer callback function.
-   */
-  repeating_timer_callback_t getTimerCallback();
-
-  /**
-   * Calculates the target speed based on the given parameters.
-   *
-   * @param deltaSteps The number of steps to move.
-   * @param initialSpeed The initial speed of the stepper motor.
-   * @param accel The acceleration of the stepper motor.
-   * @param timeMs The time in milliseconds.
-   * @return The target speed.
-   */
-  int32_t calculateTargetSpeed(const int32_t deltaSteps,
-                               const int32_t initialSpeed, const int32_t accel,
-                               const uint32_t timeMs);
-
-  /**
-   * Calculates the step increase based on the current speed, acceleration, and
-   * time.
-   *
-   * @param currentSpeed The current speed of the stepper motor.
-   * @param currentAccel The current acceleration of the stepper motor.
-   * @param timeMs The time in milliseconds.
-   * @return The step increase value.
-   */
-  int32_t getStepIncrease(const int32_t currentSpeed,
-                          const int32_t currentAccel, const uint32_t timeMs);
-
-  /**
-   * Calculates the speed increase based on the current acceleration and time in
-   * milliseconds.
-   *
-   * @param currentAccel The current acceleration value.
-   * @param timeMs The time in milliseconds.
-   * @return The calculated speed increase.
-   */
-  int32_t getSpeedIncrease(const int32_t currentAccel, const uint32_t timeMs);
 };
 #endif // __STEPPER_HPP__

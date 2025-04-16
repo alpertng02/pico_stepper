@@ -18,20 +18,18 @@ int main() {
 
     stdio_init_all();
     sleep_ms(1000);
-    Stepper stepper( 8, 9, 1600, 2);
+    Stepper stepper(8, 9, 1600);
 
-    printf("Enter => pos accel ms:\n");
+    printf("Enter => pos speed:\n");
     while (true) {
         // int i {};
-        int32_t pos {}, accel {}, speed {};
-        uint32_t ms {};
-        scanf("%ld %ld %lu", &pos, &accel, &ms);
-        sleep_ms(200);
-        if (!stepper.startMotion(pos, accel, ms)) {
-            printf("Error: Given trajectory was not possible in the motion duration!\n");
-        } else {
-            printf("Stepper started to move to %ld position with %ld acceleration in %lu ms\n", pos, accel, ms);
-        }
+        int32_t pos {}, speed {};
+        
+        scanf("%ld %ld", &pos, &speed);
+        stepper.setTargetPos(pos);
+        stepper.setSpeed(speed);
+        stepper.enable(true);
+
         sleep_ms(10);
     }
 }
